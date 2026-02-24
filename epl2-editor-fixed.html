@@ -1203,13 +1203,33 @@ function getBB(cmd,scale){
     case 'TEXT':{
       const fh=cmd.font.h*cmd.vMult;
       const charAdv = getCharAdv(cmd);
-      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(20,p(charAdv*(cmd.data.length||1))),h:Math.max(8,p(fh)),rw:false,rh:false};
+      const textW = Math.max(20, p(charAdv*(cmd.data.length||1)));
+      const fontH = Math.max(8, p(fh));
+      const rot = cmd.rot||0;
+      switch(rot){
+        case 1: // 90° CW — local x→down, local y→left
+          return {x:p(cmd.x)-fontH, y:p(cmd.y),       w:fontH, h:textW, rw:false, rh:false};
+        case 2: // 180° — local x→left, local y→up
+          return {x:p(cmd.x)-textW, y:p(cmd.y)-fontH, w:textW, h:fontH, rw:false, rh:false};
+        case 3: // 270° CW — local x→up, local y→right
+          return {x:p(cmd.x),       y:p(cmd.y)-textW, w:fontH, h:textW, rw:false, rh:false};
+        default: // 0°
+          return {x:p(cmd.x), y:p(cmd.y), w:textW, h:fontH, rw:false, rh:false};
+      }
     }
     case 'BARCODE':{
       const {bars,isC39}=getBarBits(cmd);
       const bwDots=bars ? barWidthDots(bars,isC39,cmd.narrow,cmd.wide)*BAR_WIDTH_FACTOR : (cmd.data.length||1)*cmd.narrow*11*BAR_WIDTH_FACTOR;
       const hriH=cmd.hri ? Math.max(10, Math.round(10*scale)) : 0;
-      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(4,p(bwDots)),h:p(cmd.h)+hriH,rw:false,rh:false};
+      const bw=Math.max(4,p(bwDots));
+      const bh=p(cmd.h)+hriH;
+      const rot=cmd.rot||0;
+      switch(rot){
+        case 1: return {x:p(cmd.x)-bh, y:p(cmd.y),       w:bh, h:bw, rw:false, rh:false};
+        case 2: return {x:p(cmd.x)-bw, y:p(cmd.y)-bh,    w:bw, h:bh, rw:false, rh:false};
+        case 3: return {x:p(cmd.x),    y:p(cmd.y)-bw,    w:bh, h:bw, rw:false, rh:false};
+        default: return {x:p(cmd.x), y:p(cmd.y), w:bw, h:bh, rw:false, rh:false};
+      }
     }
     case 'GRAPHIC_WRITE':
       return {x:p(cmd.x),y:p(cmd.y),w:p(cmd.bpr*8),h:p(cmd.h),rw:false,rh:false};
