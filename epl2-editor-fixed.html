@@ -1,0 +1,2466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPL2 Label Editor</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #111520; color: #dde; height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+
+/* ── TOOLBAR ── */
+#toolbar {
+  display: flex; align-items: center; gap: 0; padding: 0;
+  background: #16213e; border-bottom: 1px solid #1e3a5f; flex-shrink: 0; height: 44px;
+}
+#toolbar h1 { font-size: 13px; font-weight: 700; color: #e94560; padding: 0 16px; letter-spacing: 0.5px; border-right: 1px solid #1e3a5f; height: 100%; display:flex; align-items:center; white-space:nowrap; }
+.tb-sep { width: 1px; background: #1e3a5f; height: 100%; margin: 0 2px; }
+.tb-group { display: flex; align-items: center; gap: 5px; padding: 0 10px; height: 100%; border-right: 1px solid #1e3a5f; }
+.tb-label { font-size: 10px; color: #667; text-transform: uppercase; letter-spacing: 0.5px; }
+select, input[type=number], input[type=text] {
+  background: #0d1b2e; border: 1px solid #1e3a5f; color: #ccd;
+  padding: 3px 6px; border-radius: 3px; font-size: 12px; outline: none;
+}
+select:focus, input:focus { border-color: #e94560; }
+input[type=number] { width: 56px; }
+.tb-btn {
+  background: #1e3a5f; color: #ccd; border: 1px solid #2a4a6f; padding: 4px 10px;
+  border-radius: 3px; font-size: 11px; cursor: pointer; font-weight: 600; white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.tb-btn:hover { background: #2a4a7f; color: #fff; }
+.tb-btn.active { background: #e94560; color: #fff; border-color: #e94560; }
+.tb-btn.danger:hover { background: #8b1a2e; }
+#zoom-display { font-size: 12px; color: #778; min-width: 38px; text-align: center; }
+.spacer { flex: 1; }
+
+/* ── TOOL PALETTE ── */
+#palette {
+  display: flex; align-items: center; gap: 4px; padding: 6px 10px;
+  background: #13192e; border-bottom: 1px solid #1e3a5f; flex-shrink: 0;
+}
+#palette .pal-label { font-size: 10px; color: #556; text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+.tool-btn {
+  background: #1a2540; border: 1px solid #2a3a5a; color: #aab; padding: 5px 12px;
+  border-radius: 4px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+  transition: all 0.12s; font-weight: 500;
+}
+.tool-btn:hover { background: #243050; border-color: #3a5a8a; color: #dde; }
+.tool-btn.active { background: #e94560; border-color: #e94560; color: #fff; }
+.tool-icon { font-size: 14px; line-height: 1; }
+
+/* snap controls */
+#snap-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+#snap-controls label { font-size: 11px; color: #778; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
+#snap-size { width: 48px; }
+#snap-grid-btn { padding: 4px 8px; font-size: 11px; }
+
+/* ── MAIN LAYOUT ── */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── LEFT: EPL SOURCE ── */
+#source-panel {
+  width: 260px; flex-shrink: 0; background: #13192e;
+  border-right: 1px solid #1e3a5f; display: flex; flex-direction: column;
+}
+#source-panel .panel-head {
+  font-size: 10px; color: #556; padding: 7px 10px 5px; text-transform: uppercase;
+  letter-spacing: 0.8px; border-bottom: 1px solid #1e3a5f; display: flex; align-items: center; gap: 6px;
+}
+#epl-editor-wrap {
+  flex: 1; display: flex; overflow: hidden; position: relative; background: #0d1420;
+}
+#epl-line-nums {
+  width: 32px; flex-shrink: 0; background: #0a1018; color: #2a4a6a;
+  font-family: 'Fira Code', 'Consolas', monospace; font-size: 11px; line-height: 1.65;
+  padding: 8px 4px 8px 0; text-align: right; user-select: none; overflow: hidden;
+  border-right: 1px solid #1a2a3a;
+}
+#epl-line-nums .ln { display: block; padding-right: 6px; }
+#epl-line-nums .ln.hl { color: #e94560; background: rgba(233,69,96,0.15); }
+#epl-input {
+  flex: 1; background: transparent; color: #7aadcc; border: none; outline: none;
+  font-family: 'Fira Code', 'Consolas', monospace; font-size: 11px; line-height: 1.65;
+  padding: 8px 10px; resize: none; tab-size: 2; position: relative; z-index: 1;
+  caret-color: #fff;
+}
+#source-footer { padding: 6px 10px; border-top: 1px solid #1e3a5f; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#parse-error { font-size: 10px; color: #e94560; flex: 1; }
+
+/* ── CANVAS AREA ── */
+#canvas-panel { flex: 1; overflow: hidden; position: relative; background: #0d1120; display: flex; flex-direction: column; }
+#canvas-scroll { width: 100%; flex: 1; overflow: auto; padding: 24px; min-height: 0; }
+#canvas-wrap { position: relative; display: inline-block; }
+#label-canvas { display: block; }
+#overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
+#overlay.active { pointer-events: all; }
+#grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+/* cursor states */
+#canvas-wrap.mode-select { cursor: default; }
+#canvas-wrap.mode-place  { cursor: crosshair; }
+
+/* ── DRAG HANDLES ── */
+.dh {
+  position: absolute; border: 1.5px dashed rgba(100,160,255,0.5);
+  pointer-events: all; cursor: grab;
+  transition: border-color 0.1s, background 0.1s;
+}
+.dh:hover { border-color: rgba(100,160,255,0.9); background: rgba(100,160,255,0.07); }
+.dh.sel { border: 2px solid #e94560; background: rgba(233,69,96,0.1); cursor: grab; }
+.dh.dragging { opacity: 0.6; cursor: grabbing; }
+
+/* resize handles */
+.rh {
+  position: absolute; width: 8px; height: 8px; background: #e94560;
+  border: 1px solid #fff; border-radius: 1px; pointer-events: all;
+}
+.rh-br { right: -4px; bottom: -4px; cursor: se-resize; }
+.rh-r  { right: -4px; top: calc(50% - 4px); cursor: e-resize; }
+.rh-b  { bottom: -4px; left: calc(50% - 4px); cursor: s-resize; }
+
+/* ── INFO BAR ── */
+#page-nav { display:flex; align-items:center; gap:6px; padding:5px 10px; background:#0d1525; border-top:1px solid #1e3a5f; font-size:11px; color:#8ab; }
+#page-nav button { background:#1a2a4a; border:1px solid #2a4a7a; color:#ccd; padding:2px 8px; border-radius:3px; font-size:11px; cursor:pointer; }
+#page-nav button:hover { background:#243050; }
+#page-nav button:disabled { opacity:0.3; cursor:default; }
+#page-nav .page-label { font-weight:700; color:#ccd; min-width:60px; text-align:center; }
+#info-bar {
+  background: rgba(13,20,40,0.92); border-top: 1px solid #1e3a5f;
+  font-size: 11px; color: #556; padding: 3px 12px;
+  display: flex; gap: 20px; pointer-events: none; flex-shrink: 0;
+}
+#info-bar b { color: #889; }
+.snap-indicator { color: #e9a020; }
+
+/* ── RIGHT: PROPERTIES PANEL ── */
+#props-panel {
+  width: 220px; flex-shrink: 0; background: #13192e;
+  border-left: 1px solid #1e3a5f; display: flex; flex-direction: column; overflow-y: auto;
+}
+#props-panel .panel-head {
+  font-size: 10px; color: #556; padding: 7px 10px 5px; text-transform: uppercase;
+  letter-spacing: 0.8px; border-bottom: 1px solid #1e3a5f; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+#props-panel .panel-head span { color: #e94560; font-weight: 700; }
+#no-selection { padding: 16px 12px; font-size: 11px; color: #445; text-align: center; }
+.prop-section { border-bottom: 1px solid #1e3a5f; padding: 8px 10px; }
+.prop-section-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: #445; margin-bottom: 6px; }
+.prop-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+.prop-row:last-child { margin-bottom: 0; }
+.prop-label { font-size: 11px; color: #778; width: 50px; flex-shrink: 0; }
+.prop-label.wide { width: 70px; }
+.prop-input { flex: 1; background: #0d1420; border: 1px solid #1e3a5f; color: #ccd; padding: 3px 6px; border-radius: 3px; font-size: 11px; outline: none; min-width: 0; }
+.prop-input:focus { border-color: #e94560; }
+.prop-input.full { width: 100%; }
+.prop-select { flex: 1; background: #0d1420; border: 1px solid #1e3a5f; color: #ccd; padding: 3px 5px; border-radius: 3px; font-size: 11px; outline: none; }
+.prop-select:focus { border-color: #e94560; }
+.prop-checkbox { accent-color: #e94560; }
+.prop-del { margin-top: 6px; background: #3a1520; border: 1px solid #5a2535; color: #e94560; padding: 4px 10px; border-radius: 3px; font-size: 11px; cursor: pointer; width: 100%; font-weight: 600; }
+.prop-del:hover { background: #5a1525; }
+</style>
+</head>
+<body>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <h1>EPL2 Editor</h1>
+  <div class="tb-group">
+    <span class="tb-label">Label Size</span>
+    <select id="sel-size">
+      <option value="4x4">4" × 4"</option>
+      <option value="4x5">4" × 5"</option>
+      <option value="4x6" selected>4" × 6"</option>
+      <option value="6x4">6" × 4"</option>
+    </select>
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">DPI</span>
+    <select id="sel-dpi">
+      <option value="203" selected>203</option>
+      <option value="300">300</option>
+      <option value="600">600</option>
+    </select>
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">Zoom</span>
+    <button class="tb-btn" id="btn-zoom-out">−</button>
+    <span id="zoom-display">100%</span>
+    <button class="tb-btn" id="btn-zoom-in">+</button>
+    <button class="tb-btn" id="btn-zoom-fit">Fit</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="tb-group">
+    <button class="tb-btn" id="btn-export-png">⬇ PNG</button>
+    <button class="tb-btn" id="btn-export-print">⬇ Print PNG</button>
+  </div>
+</div>
+
+<!-- PALETTE + SNAP -->
+<div id="palette">
+  <span class="pal-label">Add</span>
+  <button class="tool-btn" data-tool="select" id="tool-select"><span class="tool-icon">↖</span> Select</button>
+  <button class="tool-btn" data-tool="text"   id="tool-text"  ><span class="tool-icon">T</span> Text</button>
+  <button class="tool-btn" data-tool="hline"  id="tool-hline" ><span class="tool-icon">—</span> H-Bar (LO)</button>
+  <button class="tool-btn" data-tool="vline"  id="tool-vline" ><span class="tool-icon">|</span> V-Bar (LO)</button>
+  <button class="tool-btn" data-tool="box"    id="tool-box"   ><span class="tool-icon">▭</span> Filled Box</button>
+  <button class="tool-btn" data-tool="box-outline" id="tool-box-outline"><span class="tool-icon">▯</span> Outline Box</button>
+  <button class="tool-btn" data-tool="barcode" id="tool-barcode"><span class="tool-icon">⌥</span> Barcode</button>
+  <button class="tool-btn" data-tool="datamatrix" id="tool-datamatrix"><span class="tool-icon">▦</span> Data Matrix</button>
+  <button class="tool-btn" data-tool="image" id="tool-image"><span class="tool-icon">🖼</span> Image</button>
+
+  <div id="snap-controls">
+    <label><input type="checkbox" id="chk-snap" checked> Snap</label>
+    <input type="number" id="snap-size" value="5" min="1" max="100" title="Snap grid size in dots">
+    <span class="tb-label">dots</span>
+    <label><input type="checkbox" id="chk-grid"> Grid</label>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- SOURCE PANEL -->
+  <div id="source-panel">
+    <div class="panel-head">EPL2 Source <span style="color:#567;font-size:9px;margin-left:6px">(images shown as B64 — use ⬇ Download for printer-ready binary)</span></div>
+    <div id="epl-editor-wrap">
+      <div id="epl-line-nums"></div>
+      <textarea id="epl-input" spellcheck="false">N
+q812
+Q1218,25
+R0,0
+ZT
+; --- SHIP FROM ---
+A30,30,0,1,1,1,N,"FROM:"
+A30,50,0,1,1,1,N,"ACME Corporation"
+A30,65,0,1,1,1,N,"123 Business Pkwy"
+A30,80,0,1,1,1,N,"Chicago, IL 60601"
+LO30,100,752,3
+; --- SHIP TO ---
+A30,115,0,2,1,1,N,"SHIP TO:"
+A30,145,0,4,2,2,N,"John Smith"
+A30,205,0,3,1,1,N,"456 Oak Avenue"
+A30,235,0,3,1,1,N,"Apt 2B"
+A30,265,0,3,1,1,N,"Springfield, IL 62701"
+A30,295,0,3,1,1,N,"United States"
+LO30,325,752,3
+; --- CARRIER / SERVICE ---
+A30,340,0,4,1,1,N,"TESTER GROUND"
+A550,340,0,3,1,1,N,"WT: 2.4 LBS"
+LO30,375,752,3
+; --- TRACKING BARCODE ---
+B30,390,0,1,3,6,120,B,"1Z999AA10123456784"
+LO30,535,752,3
+; --- ORDER INFO ---
+A30,550,0,2,1,1,N,"PO#: 78234-B"
+A30,575,0,2,1,1,N,"SKU: PROD-0042-BLU"
+A450,550,0,2,1,1,N,"QTY: 1"
+A450,575,0,2,1,1,N,"REF: ORD-2024-9981"
+LO30,600,752,3
+; --- ORDER BARCODE ---
+A30,615,0,1,1,1,N,"ORDER BARCODE:"
+B30,630,0,1,2,4,60,B,"78234B00420001"
+P1</textarea>
+    </div><!-- /epl-editor-wrap -->
+    <div id="source-footer">
+      <span id="parse-error"></span>
+      <button class="tb-btn" id="btn-render">Render ▶</button>
+      <button class="tb-btn" id="btn-download-epl" title="Downloads label.epl — binary file ready to send directly to Zebra printer. Images are embedded as real binary GW data.">⬇ Download Printer-Ready EPL2</button>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div id="canvas-panel">
+    <div id="canvas-scroll">
+      <div id="canvas-wrap" class="mode-select">
+        <canvas id="label-canvas"></canvas>
+        <canvas id="grid-canvas"></canvas>
+        <div id="overlay"></div>
+      </div>
+    </div>
+    <div id="page-nav">
+      <button id="btn-page-prev" disabled>◀</button>
+      <span class="page-label" id="page-label">Page 1 / 1</span>
+      <button id="btn-page-next" disabled>▶</button>
+      <span style="margin-left:8px;color:#567;">|</span>
+      <button id="btn-page-add">+ Add Page</button>
+      <button id="btn-page-del" style="color:#e94560;border-color:#5a2535;">✕ Delete Page</button>
+    </div>
+    <div id="info-bar">
+      <span><b>Cursor:</b> <span id="info-cursor">—</span></span>
+      <span><b>Label:</b> <span id="info-size">—</span></span>
+      <span><b>DPI:</b> <span id="info-dpi">203</span></span>
+      <span class="snap-indicator" id="snap-info"></span>
+      <span id="info-mode"></span>
+    </div>
+  </div>
+
+  <!-- PROPERTIES PANEL -->
+  <div id="props-panel">
+    <div class="panel-head">Properties <span id="props-type-label"></span></div>
+    <div id="no-selection">Select or add an element to edit its properties.</div>
+    <div id="props-content" style="display:none"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════ IMAGE IMPORT MODAL ═══════════════════════ -->
+<div id="img-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:none;align-items:center;justify-content:center;">
+  <div style="background:#131c2e;border:1px solid #2a4a7a;border-radius:8px;padding:24px;width:500px;max-width:95vw;color:#ccd;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <span style="font-size:14px;font-weight:700;color:#e94560;">Import Image → GW Command</span>
+      <button id="img-modal-close" style="background:none;border:none;color:#8ab;font-size:18px;cursor:pointer;">✕</button>
+    </div>
+
+    <!-- Drop zone -->
+    <div id="img-dropzone" style="border:2px dashed #2a4a7a;border-radius:6px;padding:32px;text-align:center;margin-bottom:12px;cursor:pointer;transition:border-color 0.2s;">
+      <div style="font-size:32px;margin-bottom:8px;">📁</div>
+      <div style="color:#8ab;font-size:13px;">Drop image here, click to browse, or paste (Ctrl+V)</div>
+      <div style="color:#567;font-size:11px;margin-top:4px;">PNG · JPG · GIF · BMP · SVG</div>
+      <input id="img-file-input" type="file" accept="image/*,.svg" style="display:none;">
+    </div>
+
+    <!-- Preview + controls -->
+    <div id="img-controls" style="display:none;">
+      <canvas id="img-preview-canvas" style="border:1px solid #2a4a7a;border-radius:4px;max-width:100%;display:block;margin:0 auto 12px;image-rendering:pixelated;"></canvas>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <label style="font-size:11px;color:#8ab;">
+          Width (dots)<br>
+          <input id="img-width" type="number" min="8" max="800" value="200" style="width:100%;background:#0d1525;border:1px solid #2a4a7a;color:#ccd;padding:4px 6px;border-radius:3px;font-size:12px;">
+        </label>
+        <label style="font-size:11px;color:#8ab;">
+          Threshold (0-255)<br>
+          <input id="img-threshold" type="number" min="0" max="255" value="128" style="width:100%;background:#0d1525;border:1px solid #2a4a7a;color:#ccd;padding:4px 6px;border-radius:3px;font-size:12px;">
+        </label>
+        <label style="font-size:11px;color:#8ab;">
+          Dither<br>
+          <select id="img-dither" style="width:100%;background:#0d1525;border:1px solid #2a4a7a;color:#ccd;padding:4px 6px;border-radius:3px;font-size:12px;">
+            <option value="threshold">Threshold only</option>
+            <option value="floyd" selected>Floyd-Steinberg</option>
+          </select>
+        </label>
+        <label style="font-size:11px;color:#8ab;">
+          Invert<br>
+          <select id="img-invert" style="width:100%;background:#0d1525;border:1px solid #2a4a7a;color:#ccd;padding:4px 6px;border-radius:3px;font-size:12px;">
+            <option value="no">No</option>
+            <option value="yes">Yes (white on black)</option>
+          </select>
+        </label>
+      </div>
+      <div style="font-size:11px;color:#567;margin-bottom:8px;" id="img-info"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="img-place-btn" style="flex:1;background:#e94560;border:none;color:#fff;padding:8px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">Place on Label</button>
+        <button id="img-copy-gw-btn" style="flex:1;background:#1a3a5a;border:1px solid #2a4a7a;color:#ccd;padding:8px;border-radius:4px;font-size:12px;cursor:pointer;">Copy GW Command</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════
+// BITMAP FONTS — Font 1 hand-reconstructed, 2-5 scaled from it
+// ═══════════════════════════════════════════════════════════════════
+function buildFont(w, h, glyphDefs) {
+  const chars = {};
+  for (const [ch, rows] of Object.entries(glyphDefs)) {
+    const out = [];
+    for (let r = 0; r < h; r++) {
+      const row = rows[r] || '';
+      let v = 0;
+      for (let c = 0; c < w; c++) if (row[c]==='1') v |= (1<<(w-1-c));
+      out.push(v);
+    }
+    chars[ch.charCodeAt(0)] = out;
+  }
+  return { w, h, chars };
+}
+
+function scaleFont(srcFont, tw, th) {
+  const chars = {};
+  for (const [code, rows] of Object.entries(srcFont.chars)) {
+    const sw = srcFont.w, sh = srcFont.h;
+    const newRows = [];
+    for (let ty=0;ty<th;ty++){
+      const sy=Math.floor(ty*sh/th), srcRow=rows[sy]||0;
+      let nr=0;
+      for (let tx=0;tx<tw;tx++){
+        const sx=Math.floor(tx*sw/tw);
+        if (srcRow & (1<<(sw-1-sx))) nr |= (1<<(tw-1-tx));
+      }
+      newRows.push(nr);
+    }
+    chars[code] = newRows;
+  }
+  return {w:tw,h:th,chars};
+}
+
+const FONT1 = buildFont(8,8,{
+  ' ':['00000000','00000000','00000000','00000000','00000000','00000000','00000000','00000000'],
+  '!':['00010000','00010000','00010000','00010000','00010000','00000000','00010000','00000000'],
+  '"':['01101100','01101100','00000000','00000000','00000000','00000000','00000000','00000000'],
+  '#':['01101100','01101100','11111110','01101100','11111110','01101100','01101100','00000000'],
+  '$':['00010000','01111110','10010000','01111100','00010010','11111100','00010000','00000000'],
+  '%':['11000000','11000110','00001100','00010000','01100000','11000110','00000110','00000000'],
+  '&':['01110000','10001100','10010000','01100000','10010110','10001100','01110110','00000000'],
+  "'":['01100000','01000000','10000000','00000000','00000000','00000000','00000000','00000000'],
+  '(':['00011000','00110000','01100000','01100000','01100000','00110000','00011000','00000000'],
+  ')':['11000000','01100000','00110000','00110000','00110000','01100000','11000000','00000000'],
+  '*':['00010000','10010010','01111100','00010000','01111100','10010010','00010000','00000000'],
+  '+':['00000000','00010000','00010000','11111110','00010000','00010000','00000000','00000000'],
+  ',':['00000000','00000000','00000000','00000000','00011000','00010000','01100000','00000000'],
+  '-':['00000000','00000000','00000000','11111110','00000000','00000000','00000000','00000000'],
+  '.':['00000000','00000000','00000000','00000000','00000000','00111000','00111000','00000000'],
+  '/':['00000110','00001100','00011000','00110000','01100000','11000000','00000000','00000000'],
+  '0':['01111100','11000110','11001110','11011110','11110110','11000110','01111100','00000000'],
+  '1':['00011000','01111000','00011000','00011000','00011000','00011000','01111110','00000000'],
+  '2':['01111100','11000110','00000110','00011100','01100000','11000000','11111110','00000000'],
+  '3':['11111110','00001100','00011000','00001100','00000110','11000110','01111100','00000000'],
+  '4':['00001100','00011100','00111100','01101100','11111110','00001100','00001100','00000000'],
+  '5':['11111110','11000000','11111100','00000110','00000110','11000110','01111100','00000000'],
+  '6':['00011100','01100000','11000000','11111100','11000110','11000110','01111100','00000000'],
+  '7':['11111110','11000110','00000110','00001100','00011000','00011000','00011000','00000000'],
+  '8':['01111100','11000110','11000110','01111100','11000110','11000110','01111100','00000000'],
+  '9':['01111100','11000110','11000110','01111110','00000110','00001100','01111000','00000000'],
+  ':':['00000000','00111000','00111000','00000000','00111000','00111000','00000000','00000000'],
+  ';':['00000000','00011000','00011000','00000000','00011000','00011000','01100000','00000000'],
+  '<':['00000110','00011000','01100000','11000000','01100000','00011000','00000110','00000000'],
+  '=':['00000000','00000000','11111110','00000000','11111110','00000000','00000000','00000000'],
+  '>':['11000000','00110000','00001100','00000110','00001100','00110000','11000000','00000000'],
+  '?':['01111100','11000110','00000110','00011100','00011000','00000000','00011000','00000000'],
+  '@':['01111100','11000110','11011110','11011110','11011100','11000000','01111100','00000000'],
+  'A':['00111000','01101100','11000110','11000110','11111110','11000110','11000110','00000000'],
+  'B':['11111100','11000110','11000110','11111100','11000110','11000110','11111100','00000000'],
+  'C':['01111100','11000110','11000000','11000000','11000000','11000110','01111100','00000000'],
+  'D':['11111000','11001100','11000110','11000110','11000110','11001100','11111000','00000000'],
+  'E':['11111110','11000000','11000000','11111100','11000000','11000000','11111110','00000000'],
+  'F':['11111110','11000000','11000000','11111100','11000000','11000000','11000000','00000000'],
+  'G':['01111100','11000110','11000000','11011110','11000110','11000110','01111110','00000000'],
+  'H':['11000110','11000110','11000110','11111110','11000110','11000110','11000110','00000000'],
+  'I':['01111100','00011000','00011000','00011000','00011000','00011000','01111100','00000000'],
+  'J':['00000110','00000110','00000110','00000110','11000110','11000110','01111100','00000000'],
+  'K':['11000110','11001100','11011000','11110000','11011000','11001100','11000110','00000000'],
+  'L':['11000000','11000000','11000000','11000000','11000000','11000000','11111110','00000000'],
+  'M':['11000110','11101110','11111110','11010110','11000110','11000110','11000110','00000000'],
+  'N':['11000110','11100110','11110110','11011110','11001110','11000110','11000110','00000000'],
+  'O':['01111100','11000110','11000110','11000110','11000110','11000110','01111100','00000000'],
+  'P':['11111100','11000110','11000110','11111100','11000000','11000000','11000000','00000000'],
+  'Q':['01111100','11000110','11000110','11000110','11010110','11001100','01110110','00000000'],
+  'R':['11111100','11000110','11000110','11111100','11011000','11001100','11000110','00000000'],
+  'S':['01111100','11000110','11000000','01111100','00000110','11000110','01111100','00000000'],
+  'T':['11111110','00011000','00011000','00011000','00011000','00011000','00011000','00000000'],
+  'U':['11000110','11000110','11000110','11000110','11000110','11000110','01111100','00000000'],
+  'V':['11000110','11000110','11000110','11000110','11000110','01101100','00111000','00000000'],
+  'W':['11000110','11000110','11000110','11010110','11111110','11101110','11000110','00000000'],
+  'X':['11000110','11000110','01101100','00111000','01101100','11000110','11000110','00000000'],
+  'Y':['11000110','11000110','01101100','00111000','00011000','00011000','00011000','00000000'],
+  'Z':['11111110','00000110','00001100','00011000','01100000','11000000','11111110','00000000'],
+  '[':['01111000','01100000','01100000','01100000','01100000','01100000','01111000','00000000'],
+  '\\':['11000000','01100000','00110000','00011000','00001100','00000110','00000000','00000000'],
+  ']':['00011110','00000110','00000110','00000110','00000110','00000110','00011110','00000000'],
+  '^':['00011000','00111100','01100110','11000011','00000000','00000000','00000000','00000000'],
+  '_':['00000000','00000000','00000000','00000000','00000000','00000000','11111110','00000000'],
+  '`':['01100000','00110000','00000000','00000000','00000000','00000000','00000000','00000000'],
+  'a':['00000000','00000000','01111100','00000110','01111110','11000110','01111110','00000000'],
+  'b':['11000000','11000000','11111100','11000110','11000110','11000110','11111100','00000000'],
+  'c':['00000000','00000000','01111100','11000110','11000000','11000110','01111100','00000000'],
+  'd':['00000110','00000110','01111110','11000110','11000110','11000110','01111110','00000000'],
+  'e':['00000000','00000000','01111100','11000110','11111110','11000000','01111100','00000000'],
+  'f':['00011100','00110000','01111100','00110000','00110000','00110000','00110000','00000000'],
+  'g':['00000000','00000000','01111110','11000110','11000110','01111110','00000110','01111100'],
+  'h':['11000000','11000000','11111100','11000110','11000110','11000110','11000110','00000000'],
+  'i':['00011000','00000000','01111000','00011000','00011000','00011000','01111110','00000000'],
+  'j':['00000110','00000000','00000110','00000110','00000110','11000110','11000110','01111100'],
+  'k':['11000000','11000000','11001100','11011000','11110000','11011000','11001100','00000000'],
+  'l':['01111000','00011000','00011000','00011000','00011000','00011000','01111110','00000000'],
+  'm':['00000000','00000000','11101100','11111110','11010110','11000110','11000110','00000000'],
+  'n':['00000000','00000000','11111100','11000110','11000110','11000110','11000110','00000000'],
+  'o':['00000000','00000000','01111100','11000110','11000110','11000110','01111100','00000000'],
+  'p':['00000000','00000000','11111100','11000110','11000110','11111100','11000000','11000000'],
+  'q':['00000000','00000000','01111110','11000110','11000110','01111110','00000110','00000110'],
+  'r':['00000000','00000000','11011100','11100000','11000000','11000000','11000000','00000000'],
+  's':['00000000','00000000','01111100','11000000','01111100','00000110','11111100','00000000'],
+  't':['00110000','00110000','11111100','00110000','00110000','00110110','00011100','00000000'],
+  'u':['00000000','00000000','11000110','11000110','11000110','11000110','01111110','00000000'],
+  'v':['00000000','00000000','11000110','11000110','11000110','01101100','00111000','00000000'],
+  'w':['00000000','00000000','11000110','11000110','11010110','11111110','01101100','00000000'],
+  'x':['00000000','00000000','11000110','01101100','00111000','01101100','11000110','00000000'],
+  'y':['00000000','00000000','11000110','11000110','01111110','00000110','01111100','00000000'],
+  'z':['00000000','00000000','11111110','00001100','00110000','11000000','11111110','00000000'],
+  '{':['00011100','00110000','00110000','01100000','00110000','00110000','00011100','00000000'],
+  '|':['00011000','00011000','00011000','00011000','00011000','00011000','00011000','00000000'],
+  '}':['11100000','00110000','00110000','00011000','00110000','00110000','11100000','00000000'],
+  '~':['00000000','01110000','11110110','00001110','00000000','00000000','00000000','00000000'],
+});
+
+// Zebra EPL2 built-in font sizes (from Zebra EPL2 Programming Guide):
+// Font 1: 6w×8h, Font 2: 10w×16h, Font 3: 12w×20h, Font 4: 14w×24h, Font 5: 32w×48h
+const EPL_FONTS = {
+  1: scaleFont(FONT1,  6,  8),
+  2: scaleFont(FONT1, 10, 16),
+  3: scaleFont(FONT1, 12, 20),
+  4: scaleFont(FONT1, 14, 24),
+  5: scaleFont(FONT1, 32, 48),
+  6: scaleFont(FONT1, 14, 24),
+  7: scaleFont(FONT1, 14, 24),
+  8: scaleFont(FONT1, 32, 48),
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CODE 128B ENCODER
+// ═══════════════════════════════════════════════════════════════════
+const C128B = [
+  '11011001100','11001101100','11001100110','10010011000','10010001100','10001001100',
+  '10011001000','10011000100','10001100100','11001001000','11001000100','11000100100',
+  '10110011100','10011011100','10011001110','10111001100','10011101100','10011100110',
+  '11001110010','11001011100','11001001110','11011100100','11001110100','11101101110',
+  '11101001100','11100101100','11100100110','11101100100','11100110100','11100110010',
+  '11011011000','11011000110','11000110110','10100011000','10001011000','10001000110',
+  '10110001000','10001101000','10001100010','11010001000','11000101000','11000100010',
+  '10110111000','10110001110','10001101110','10111011000','10111000110','10001110110',
+  '11101110110','10111001110','11100010110','11110110100','11101101100','11000010010',
+  '11001000010','11110111010','11000010100','10001111010','10100111100','10010111100',
+  '10010011110','10111100100','10011110100','10011110010','11110100100','11110010100',
+  '11110010010','11011110100','11011110010','11110110010','10110111100','10110011110',
+  '10011101110','10011011110','10111011110','10111101100','10111100110','11110100110',
+  '11110110100','11101001110','11110001010','10100110000','10100001100','10010110000',
+  '10010000110','10000101100','10000100110','10110010000','10110000100','10011010000',
+  '10011000010','10000110100','10000110010','11000010100','11001010000','11110111010',
+  '11000010010','10001111010','10100111100','10010111100','10010011110','10111100100',
+  '11100101110','11110001110',
+];
+const C128_START_B='11010010000', C128_STOP='1100011101011';
+function encodeCode128Auto(text){
+  // Auto mode: use subset C for digit pairs, subset B for everything else
+  // This matches Zebra EPL2 type '1' (auto) behaviour — more compact than pure B
+  const CODE_B=100, CODE_C=99;
+  const START_B='11010010000', START_C='11010011100';
+  
+  // Build segments of type B or C
+  const segs=[];
+  let i=0;
+  while(i<text.length){
+    let j=i;
+    while(j<text.length && text[j]>='0' && text[j]<='9') j++;
+    const digits=j-i;
+    if(digits>=2){
+      const pairs=Math.floor(digits/2);
+      segs.push({t:'C',s:text.slice(i,i+pairs*2)});
+      i+=pairs*2;
+    } else {
+      let k=i;
+      // Collect non-digit chars (or single digit)
+      while(k<text.length){
+        let d=k; while(d<text.length&&text[d]>='0'&&text[d]<='9')d++;
+        if(d-k>=2) break;
+        k++;
+      }
+      segs.push({t:'B',s:text.slice(i,k)});
+      i=k;
+    }
+  }
+  // Merge adjacent same-type
+  const merged=[];
+  for(const sg of segs){
+    if(merged.length&&merged[merged.length-1].t===sg.t) merged[merged.length-1].s+=sg.s;
+    else merged.push({...sg});
+  }
+  
+  let bars='', check=0, pos=1;
+  const first=merged[0]?.t||'B';
+  if(first==='C'){bars=START_C;check=105;}
+  else{bars=START_B;check=104;}
+  let cur=first;
+  
+  for(const sg of merged){
+    if(sg.t!==cur){
+      const sw=sg.t==='C'?CODE_C:CODE_B;
+      bars+=C128B[sw]; check+=pos*sw; pos++; cur=sg.t;
+    }
+    if(sg.t==='B'){
+      for(const ch of sg.s){
+        const code=ch.charCodeAt(0)-32;
+        if(code<0||code>95) continue;
+        bars+=C128B[code]||''; check+=pos*code; pos++;
+      }
+    } else {
+      for(let i=0;i<sg.s.length;i+=2){
+        const code=parseInt(sg.s.slice(i,i+2));
+        bars+=C128B[code]; check+=pos*code; pos++;
+      }
+    }
+  }
+  bars+=C128B[check%103]; bars+=C128_STOP;
+  return bars;
+}
+// Keep B-only encoder for explicit type 1B
+function encodeCode128B(text){
+  let bars=C128_START_B, check=104;
+  for(let i=0;i<text.length;i++){
+    const code=text.charCodeAt(i)-32;
+    if(code<0||code>95) continue;
+    bars+=C128B[code]||''; check+=(i+1)*code;
+  }
+  bars+=C128B[check%103]||''; bars+=C128_STOP;
+  return bars;
+}
+
+const C39={
+  '0':'101001101101','1':'110100101011','2':'101100101011','3':'110110010101',
+  '4':'101001101011','5':'110100110101','6':'101100110101','7':'101001011011',
+  '8':'110100101101','9':'101100101101','A':'110101001011','B':'101101001011',
+  'C':'110110100101','D':'101011001011','E':'110101100101','F':'101101100101',
+  'G':'101010011011','H':'110101001101','I':'101101001101','J':'101011001101',
+  'K':'110101010011','L':'101101010011','M':'110110101001','N':'101011010011',
+  'O':'110101101001','P':'101101101001','Q':'101010110011','R':'110101011001',
+  'S':'101101011001','T':'101011011001','U':'110010101011','V':'100110101011',
+  'W':'110011010101','X':'100101101011','Y':'110010110101','Z':'100110110101',
+  '-':'100101011011','.':'110010101101',' ':'100110101101','*':'100101101101',
+};
+function encodeCode39(text){
+  let b=C39['*']+'0';
+  for(const ch of text.toUpperCase()){if(C39[ch]) b+=C39[ch]+'0';}
+  b+=C39['*']; return b;
+}
+
+// ── UPC-A / EAN-13 ENCODER ───────────────────────────────────────
+// L-code (left odd parity), G-code (left even parity), R-code (right)
+const UPC_L=['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+const UPC_G=['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
+const UPC_R=['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
+// EAN-13 first-digit parity patterns (L=0, G=1)
+const EAN13_PARITY=['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+
+function encodeUPCA(data){
+  // Accepts 11 or 12 digit string (computes check digit if 11)
+  const digits=data.replace(/\D/g,'');
+  if(digits.length<11) return null;
+  const d=digits.slice(0,11).split('').map(Number);
+  // Check digit
+  const check=(10-((d[0]+d[2]+d[4]+d[6]+d[8]+d[10])*3+(d[1]+d[3]+d[5]+d[7]+d[9])*1)%10)%10;
+  const all=[...d,check];
+  // Encode: quiet(0) + start(101) + 6 left(L) + mid(01010) + 6 right(R) + end(101) + quiet(0)
+  let bars='101'; // start guard
+  for(let i=0;i<6;i++) bars+=UPC_L[all[i]];
+  bars+='01010'; // center guard
+  for(let i=6;i<12;i++) bars+=UPC_R[all[i]];
+  bars+='101'; // end guard
+  return bars; // 95 modules total
+}
+
+function encodeEAN13(data){
+  const digits=data.replace(/\D/g,'');
+  if(digits.length<12) return null;
+  const d=digits.slice(0,12).split('').map(Number);
+  // Check digit
+  const check=(10-((d[1]+d[3]+d[5]+d[7]+d[9]+d[11])*3+(d[0]+d[2]+d[4]+d[6]+d[8]+d[10])*1)%10)%10;
+  const all=[...d,check];
+  const parity=EAN13_PARITY[all[0]];
+  let bars='101'; // start
+  for(let i=0;i<6;i++) bars+=(parity[i]==='G'?UPC_G:UPC_L)[all[i+1]];
+  bars+='01010'; // center
+  for(let i=0;i<6;i++) bars+=UPC_R[all[i+7]];
+  bars+='101'; // end
+  return bars; // 95 modules
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// EPL2 PARSER
+// ═══════════════════════════════════════════════════════════════════
+// Split EPL source into pages at each 'N' command
+// Each page is the block from N to the next N (exclusive) or end of source
+function splitPages(src){
+  const lines=src.split(/\r?\n/);
+  const pages=[];
+  let cur=[];
+  for(const line of lines){
+    const t=line.trim();
+    if(t.toUpperCase()==='N' && cur.length>0){
+      pages.push(cur.join('\n'));
+      cur=[line];
+    } else {
+      cur.push(line);
+    }
+  }
+  if(cur.length) pages.push(cur.join('\n'));
+  return pages.length ? pages : [src];
+}
+
+function joinPages(pages){ return pages.join('\n'); }
+
+function getPageSrc(src, pageIdx){
+  const pages=splitPages(src);
+  return pages[Math.min(pageIdx, pages.length-1)]||'';
+}
+
+// Replace one page's source in the full source
+function setPageSrc(src, pageIdx, pageSrc){
+  const pages=splitPages(src);
+  pages[pageIdx]=pageSrc;
+  return joinPages(pages);
+}
+
+function parseEPL2(src){
+  const lines=src.split(/\r?\n/);
+  const cmds=[];
+  const cfg={width:812,height:609,dpi:203,refX:0,refY:0};
+
+  function extractParams(str){
+    const res=[]; let i=0;
+    while(i<str.length){
+      if(str[i]==='"'){
+        const end=str.indexOf('"',i+1);
+        if(end===-1){res.push(str.slice(i+1));break;}
+        res.push(str.slice(i+1,end)); i=end+2;
+      } else {
+        const nc=str.indexOf(',',i);
+        if(nc===-1){res.push(str.slice(i).trim());break;}
+        res.push(str.slice(i,nc).trim()); i=nc+1;
+      }
+    }
+    return res;
+  }
+
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(!raw||raw.startsWith(';')) continue;
+    const two=raw.substring(0,2).toUpperCase();
+    const one=raw[0].toUpperCase();
+
+    if(two==='ZT'||two==='ZB'){cmds.push({type:'PRINT_DIR',dir:two[1]});continue;}
+    if(two==='LO'){
+      // Peek at next line — if it's an LE inset of this LO, treat as BOX_OUTLINE
+      const lo=extractParams(raw.slice(2).trim());
+      const nextRaw=(lines[li+1]||'').trim();
+      if(nextRaw.substring(0,2).toUpperCase()==='LE'){
+        const le=extractParams(nextRaw.slice(2).trim());
+        // LE is an inset of LO if origins/sizes match with consistent thickness
+        const tx=+le[0]-(+lo[0]), ty=+le[1]-(+lo[1]);
+        const tw=(+lo[2])-(+le[2]), th=(+lo[3])-(+le[3]);
+        if(tx>0 && ty===tx && tw===tx*2 && th===tx*2){
+          cmds.push({type:'BOX_OUTLINE',x:+lo[0],y:+lo[1],w:+lo[2],h:+lo[3],t:tx,lineIdx:li});
+          li+=2; // skip both LO and LE
+          continue;
+        }
+      }
+      cmds.push({type:'LINE_OPAQUE',x:+lo[0]||0,y:+lo[1]||0,w:+lo[2]||0,h:+lo[3]||0,lineIdx:li});
+      continue;
+    }
+    if(two==='LE'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_ERASE',x:+p[0]||0,y:+p[1]||0,w:+p[2]||0,h:+p[3]||0,lineIdx:li});continue;}
+    if(two==='LS'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_HORIZ',x:+p[0]||0,y:+p[1]||0,w:+p[2]||0,t:+p[3]||1,lineIdx:li});continue;}
+    if(two==='LV'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_VERT', x:+p[0]||0,y:+p[1]||0,h:+p[2]||0,t:+p[3]||1,lineIdx:li});continue;}
+    if(two==='LD'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_DIAG',x1:+p[0]||0,y1:+p[1]||0,x2:+p[2]||0,y2:+p[3]||0,t:+p[4]||1,lineIdx:li});continue;}
+    if(two==='GW'){
+      const rest=raw.slice(2).trim();const p=rest.split(',');
+      if(p.length>=4){
+        const ds=p.slice(0,4).join(',').length+1;
+        const gwraw=rest.slice(ds);
+        let gwdata='', gwb64=null;
+        if(gwraw.startsWith('B64:')){
+          gwb64=gwraw;  // keep the B64: string for round-trip serialization
+          try{gwdata=atob(gwraw.slice(4));}catch(e){gwdata='';}
+        } else {
+          gwdata=gwraw;
+        }
+        cmds.push({type:'GRAPHIC_WRITE',x:+p[0],y:+p[1],bpr:+p[2],h:+p[3],data:gwdata,gwb64:gwb64,lineIdx:li});
+      }
+      continue;
+    }
+    if(raw[0]==='b'){
+      // EPL2 2D barcode (lowercase b): bX,Y,type,"data"
+      // type: D=DataMatrix ECC200, Q=QR, P=PDF417, etc.
+      const p=extractParams(raw.slice(1).trim());
+      if(p.length>=4) cmds.push({type:'DATAMATRIX',x:+p[0]||0,y:+p[1]||0,dmtype:p[2]||'D',data:p[3]||'',module:2,lineIdx:li});
+      continue;
+    }
+
+    switch(one){
+      case 'N': cmds.push({type:'NEW_LABEL'}); break;
+      case 'P': {const p=extractParams(raw.slice(1).trim());cmds.push({type:'PRINT',qty:+p[0]||1});break;}
+      case 'Q': {const p=extractParams(raw.slice(1).trim());cfg.height=+p[0]||cfg.height;cmds.push({type:'LABEL_LENGTH',h:cfg.height});break;}
+      case 'q': {cfg.width=+raw.slice(1).trim()||cfg.width;cmds.push({type:'LABEL_WIDTH',w:cfg.width});break;}
+      case 'R': {const p=extractParams(raw.slice(1).trim());cfg.refX=+p[0]||0;cfg.refY=+p[1]||0;cmds.push({type:'REFERENCE',x:cfg.refX,y:cfg.refY});break;}
+      case 'S': case 'D': case 'I': case 'f': case 'F': case 'J': break;
+      case 'A': {
+        const p=extractParams(raw.slice(1).trim());
+        if(p.length<8) break;
+        const fn=+p[3]||1;
+        cmds.push({type:'TEXT',x:+p[0]||0,y:+p[1]||0,rot:+p[2]||0,fontNum:fn,font:EPL_FONTS[fn]||FONT1,hMult:Math.max(1,+p[4]||1),vMult:Math.max(1,+p[5]||1),rev:p[6]==='R',data:p[7]||'',lineIdx:li});
+        break;
+      }
+      case 'B': {
+        const p=extractParams(raw.slice(1).trim());
+        if(p.length<9) break;
+        cmds.push({type:'BARCODE',x:+p[0]||0,y:+p[1]||0,rot:+p[2]||0,btype:p[3]||'1',narrow:+p[4]||2,wide:+p[5]||4,h:+p[6]||50,hri:p[7]==='B',data:p[8]||'',lineIdx:li});
+        break;
+      }
+    }
+  }
+  return {cmds,cfg};
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDERER
+// ═══════════════════════════════════════════════════════════════════
+function renderEPL2(cmds,cfg,canvas,zoom,dpi){
+  const scale=zoom*(dpi/203);
+  const W=Math.round(cfg.width*scale), H=Math.round(cfg.height*scale);
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+  const px=d=>Math.round(d*scale);
+
+  for(const cmd of cmds){
+    switch(cmd.type){
+      case 'BOX_OUTLINE': {
+        const t=Math.max(1,px(cmd.t||3));
+        ctx.fillStyle='#000';
+        ctx.fillRect(px(cmd.x),px(cmd.y),Math.max(1,px(cmd.w)),t);               // top
+        ctx.fillRect(px(cmd.x),px(cmd.y+cmd.h-cmd.t),Math.max(1,px(cmd.w)),t);   // bottom
+        ctx.fillRect(px(cmd.x),px(cmd.y),t,Math.max(1,px(cmd.h)));               // left
+        ctx.fillRect(px(cmd.x+cmd.w-cmd.t),px(cmd.y),t,Math.max(1,px(cmd.h)));   // right
+        break;
+      }
+      case 'LINE_OPAQUE': ctx.fillStyle='#000'; ctx.fillRect(px(cmd.x),px(cmd.y),Math.max(1,px(cmd.w)),Math.max(1,px(cmd.h))); break;
+      case 'LINE_ERASE':  ctx.fillStyle='#fff'; ctx.fillRect(px(cmd.x),px(cmd.y),Math.max(1,px(cmd.w)),Math.max(1,px(cmd.h))); break;
+      // LS: y is the TOP edge of the line, thickness grows downward
+      case 'LINE_HORIZ': {
+        const lw=Math.max(1,px(cmd.w)), lt=Math.max(1,px(cmd.t));
+        ctx.fillStyle='#000'; ctx.fillRect(px(cmd.x),px(cmd.y),lw,lt); break;
+      }
+      // LV: x is the LEFT edge of the line, thickness grows rightward
+      case 'LINE_VERT': {
+        const lh=Math.max(1,px(cmd.h)), lt=Math.max(1,px(cmd.t));
+        ctx.fillStyle='#000'; ctx.fillRect(px(cmd.x),px(cmd.y),lt,lh); break;
+      }
+      case 'LINE_DIAG':
+        ctx.strokeStyle='#000'; ctx.lineWidth=Math.max(1,px(cmd.t));
+        ctx.beginPath(); ctx.moveTo(px(cmd.x1),px(cmd.y1)); ctx.lineTo(px(cmd.x2),px(cmd.y2)); ctx.stroke(); break;
+      case 'TEXT':    drawText(ctx,cmd,scale); break;
+      case 'BARCODE': drawBarcode(ctx,cmd,scale); break;
+      case 'DATAMATRIX': drawDataMatrix(ctx,cmd,scale); break;
+      case 'GRAPHIC_WRITE': drawGW(ctx,cmd,scale); break;
+    }
+  }
+}
+
+// Per-font character advance in dots per hMult unit.
+// Calibrated from real Zebra renderer measurements:
+//   Font1 hMult=1 "HANDLE WITH CARE" (16 chars, x=50): real end=205 → charAdv=9.6875
+//   Font3 hMult=2 "John Smith"       (10 chars, x=50): real end=325 → charAdv/hMult=13.75
+//   Font4 hMult=1 "SHIPPING LABEL"   (14 chars, x=50): real end=225 → charAdv=12.5
+// Font2 and Font5 are estimated pending calibration measurements.
+// Barcode width scaling factor — ratio of real Zebra printer module width to nominal.
+// Calibrated: "1Z999AA10123456784" Code128, narrow=2, 233 modules → bare=466 dots,
+// real renderer end=640 (x=50 start) → real width=590 → factor=590/466=1.2661
+const BAR_WIDTH_FACTOR = 1.2661;
+
+const FONT_CHAR_ADVANCE = {
+  1:  9.6875,  // calibrated: Font1 6×8   — "HANDLE WITH CARE" (16 chars, x=50): real end=205
+  2: 11.75,    // estimated:  Font2 10×16  — spacing=1.75 matches Font3/Font4 pattern
+  3: 13.75,    // calibrated: Font3 12×20  — "John Smith" (10 chars, x=50, hMult=2): real end=325 → /hMult=13.75
+  4: 15.7143,  // calibrated: Font4 14×24  — "SHIPPING LABEL" (14 chars, x=50): real end=270
+  5: 35.92,    // estimated:  Font5 32×48  — ratio-extrapolated from Font4
+  6: 15.7143,  // same as Font4
+  7: 15.7143,  // same as Font4
+  8: 35.92,    // same as Font5
+};
+function getCharAdv(cmd){
+  const base = FONT_CHAR_ADVANCE[cmd.fontNum] ?? (cmd.font.w + 1.75);
+  return base * cmd.hMult;
+}
+
+function drawText(ctx,cmd,scale){
+  const {x,y,font,hMult,vMult,rev,data,rot}=cmd;
+  const fh=font.h*vMult;
+  const charAdv = getCharAdv(cmd);
+  ctx.save();
+  const rotMap=[0,Math.PI/2,Math.PI,-Math.PI/2];
+  ctx.translate(Math.round(x*scale),Math.round(y*scale));
+  ctx.rotate(rotMap[rot]||0);
+  if(rev){ctx.fillStyle='#000';ctx.fillRect(0,0,Math.round(charAdv*data.length*scale),Math.round(fh*scale));ctx.fillStyle='#fff';}
+  else ctx.fillStyle='#000';
+  for(let ci=0;ci<data.length;ci++){
+    const code=data.charCodeAt(ci);
+    const glyphRows=font.chars[code];
+    if(!glyphRows){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1;ctx.strokeRect(Math.round(ci*charAdv*scale),0,Math.round(charAdv*scale)-1,Math.round(fh*scale)-1);continue;}
+    const cx=Math.round(ci*charAdv*scale);
+    for(let row=0;row<font.h;row++){
+      const rb=glyphRows[row];
+      for(let col=0;col<font.w;col++){
+        if(rb&(1<<(font.w-1-col))){
+          ctx.fillRect(cx+Math.round(col*hMult*scale),Math.round(row*vMult*scale),Math.max(1,Math.round(hMult*scale)),Math.max(1,Math.round(vMult*scale)));
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// ── SHARED BARCODE ENCODER ────────────────────────────────────────
+// Single source of truth used by BOTH drawBarcode and getBB so that
+// the bounding box always exactly matches the rendered barcode width.
+function getBarBits(cmd){
+  const bu=(cmd.btype||'1').toUpperCase();
+  const isC39=(bu==='2'||bu==='3'||bu==='4'||bu==='5');
+  // EPL2 barcode type routing:
+  // UA/UA0 = UPC-A, UE/UE0 = UPC-E, E8/E9 = EAN-8, EA/EB = EAN-13
+  // 1/A/B/C/D/E = Code 128, 2/3/4/5 = Code 39
+  const isUPCA  = bu.startsWith('UA');
+  const isEAN13 = bu.startsWith('EA') || bu.startsWith('EB');
+  let bars;
+  if(isUPCA)       bars=encodeUPCA(cmd.data);
+  else if(isEAN13) bars=encodeEAN13(cmd.data);
+  else if(isC39)   bars=encodeCode39(cmd.data);
+  else             bars=encodeCode128B(cmd.data);
+  return {bars, isC39};
+}
+
+// Returns the barcode width in DOTS (at scale=1) given the encoded bars.
+function barWidthDots(bars,isC39,narrow,wide){
+  let dots=0, i=0;
+  while(i<bars.length){
+    let run=1;
+    while(i+run<bars.length && bars[i+run]===bars[i]) run++;
+    dots += isC39 ? (run===1 ? narrow : wide) : run*narrow;
+    i+=run;
+  }
+  return dots;
+}
+
+function drawBarcode(ctx,cmd,scale){
+  const {x,y,narrow,wide,h,hri,data,rot}=cmd;
+  const {bars,isC39}=getBarBits(cmd);
+  if(!bars) return;
+
+  // The bounding box width (in dots) is the ground truth total width.
+  // Back-calculate the exact pixel-per-module ratio so bars fill it precisely,
+  // eliminating rounding drift between getBB and the rendered barcode.
+  const totalDots = barWidthDots(bars, isC39, narrow, wide);
+  const targetWidthPx = totalDots * scale;          // exact float px the BB uses
+  const bh = Math.round(h * scale);
+
+  ctx.save();
+  const rotMap=[0,Math.PI/2,Math.PI,-Math.PI/2];
+  ctx.translate(Math.round(x*scale), Math.round(y*scale));
+  ctx.rotate(rotMap[rot]||0);
+
+  // Count total bar-units in the bit pattern (denominator for scaling)
+  let totalUnits=0, i=0;
+  while(i<bars.length){
+    let run=1;
+    while(i+run<bars.length && bars[i+run]===bars[i]) run++;
+    totalUnits += isC39 ? (run===1 ? 1 : (wide/narrow)) : run;
+    i+=run;
+  }
+  // pxPerUnit: how many canvas px = 1 narrow-module worth of space
+  // BAR_WIDTH_FACTOR calibrated from real Zebra renderer:
+  // "1Z999AA10123456784" Code128 (233 modules, narrow=2) → real end=640 (590 dots)
+  // bare = 466 dots → factor = 590/466 = 1.2661
+  const pxPerUnit = targetWidthPx / (totalDots / narrow) * BAR_WIDTH_FACTOR;
+
+  let dotPos=0;
+  i=0;
+  while(i<bars.length){
+    const bit=bars[i];
+    let run=1;
+    while(i+run<bars.length && bars[i+run]===bit) run++;
+    // units this element occupies
+    const units = isC39 ? (run===1 ? 1 : (wide/narrow)) : run;
+    const x0 = dotPos;
+    dotPos += units * pxPerUnit;
+    if(bit==='1'){
+      ctx.fillStyle='#000';
+      // Use exact floats then round outward for crisp bars with no gaps
+      const rx = Math.round(x0);
+      const rw = Math.max(1, Math.round(dotPos) - rx);
+      ctx.fillRect(rx, 0, rw, bh);
+    }
+    i+=run;
+  }
+
+  // HRI: draw below barcode using EPL bitmap Font4 (14×24 dots) — matches real Zebra appearance
+  if(hri&&data){
+    const hriFont = EPL_FONTS[4];
+    const hriHMult = 1, hriVMult = 1;
+    const hriCharAdv = FONT_CHAR_ADVANCE[4] * hriHMult;
+    const hriY = bh + Math.max(1, Math.round(scale));
+    ctx.fillStyle = '#000';
+    for(let ci = 0; ci < data.length; ci++){
+      const code = data.charCodeAt(ci);
+      const glyphRows = hriFont.chars[code];
+      if(!glyphRows) continue;
+      const cx = Math.round(ci * hriCharAdv * scale);
+      for(let row = 0; row < hriFont.h; row++){
+        const rb = glyphRows[row];
+        for(let col = 0; col < hriFont.w; col++){
+          if(rb & (1 << (hriFont.w - 1 - col))){
+            ctx.fillRect(
+              cx + Math.round(col * hriHMult * scale),
+              hriY + Math.round(row * hriVMult * scale),
+              Math.max(1, Math.round(hriHMult * scale)),
+              Math.max(1, Math.round(hriVMult * scale))
+            );
+          }
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DATA MATRIX ENCODER (ECC 200) — ISO/IEC 16022
+// ═══════════════════════════════════════════════════════════════════
+function encodeDataMatrix(str){
+  // GF(256) with primitive polynomial 0x12D
+  const gfExp=new Uint8Array(512),gfLog=new Uint8Array(256);
+  {let x=1;for(let i=0;i<255;i++){gfExp[i]=x;gfLog[x]=i;x<<=1;if(x>=256)x^=0x12D;}for(let i=255;i<512;i++)gfExp[i]=gfExp[i-255];}
+  const gfMul=(a,b)=>!a||!b?0:gfExp[(gfLog[a]+gfLog[b])%255];
+
+  function rsEncode(data,nErr){
+    let g=[1];
+    for(let i=0;i<nErr;i++){
+      const p=[1,gfExp[i]],ng=new Array(g.length+1).fill(0);
+      for(let j=0;j<g.length;j++)for(let k=0;k<p.length;k++)ng[j+k]^=gfMul(g[j],p[k]);
+      g=ng;
+    }
+    const msg=[...data,...new Array(nErr).fill(0)];
+    for(let i=0;i<data.length;i++){const c=msg[i];if(c)for(let j=1;j<g.length;j++)msg[i+j]^=gfMul(g[j],c);}
+    return msg.slice(data.length);
+  }
+
+  // Symbol table: [rows,cols,regRows,regCols,dataWords,errWords]
+  const SYM=[
+    [10,10,8,8,3,5],[12,12,10,10,5,7],[14,14,12,12,8,10],[16,16,14,14,12,12],
+    [18,18,16,16,18,14],[20,20,18,18,22,18],[22,22,20,20,30,20],[24,24,22,22,36,24],
+    [26,26,24,24,44,28],[32,32,14,14,62,36],[36,36,16,16,86,42],[40,40,18,18,114,48],
+    [44,44,20,20,144,56],[48,48,22,22,174,68],[52,52,24,24,204,84],
+    [64,64,14,14,280,112],[72,72,16,16,368,144],[80,80,18,18,456,192],
+    [88,88,20,20,576,224],[96,96,22,22,696,272],[104,104,24,24,816,336],
+    [120,120,18,18,1050,408],[132,132,20,20,1304,496],[144,144,22,22,1558,620],
+  ];
+
+  // ASCII encode
+  const cw=[];
+  for(let i=0;i<str.length;){
+    const c=str.charCodeAt(i);
+    if(c>=48&&c<=57&&i+1<str.length){const d=str.charCodeAt(i+1);if(d>=48&&d<=57){cw.push((c-48)*10+(d-48)+130);i+=2;continue;}}
+    cw.push(c+1);i++;
+  }
+
+  const sym=SYM.find(s=>s[4]>=cw.length)||SYM[SYM.length-1];
+  const [rows,cols,rR,rC,nD,nE]=sym;
+
+  // Pad to nD codewords
+  while(cw.length<nD) cw.push(cw.length===0?129:(((149*(cw.length+1))%253+130)%254)||1);
+
+  // Interleaved RS blocks
+  const nBlk=Math.floor(rows/rR)*Math.floor(cols/rC);
+  const bD=Math.floor(nD/nBlk),bE=Math.floor(nE/nBlk);
+  const allEcc=[];
+  for(let b=0;b<nBlk;b++) allEcc.push(...rsEncode(cw.slice(b*bD,(b+1)*bD),bE));
+  const stream=[...cw,...allEcc];
+
+  // Matrix — -1=unset, 0/1=module
+  const M=new Int8Array(rows*cols).fill(-1);
+
+  // L-shaped finder
+  for(let i=0;i<rows;i++) M[i*cols]=1;
+  for(let j=0;j<cols;j++) M[(rows-1)*cols+j]=1;
+  for(let j=0;j<cols;j+=2) M[j]=1;
+  for(let i=0;i<rows;i+=2) M[i*cols+cols-1]=1;
+
+  // Alignment patterns for multi-region symbols
+  const nrR=rows/rR,nrC=cols/rC;
+  if(nrR>1||nrC>1){
+    for(let ri=1;ri<nrR;ri++){
+      for(let ci=0;ci<nrC;ci++){
+        const r0=ri*rR+ri*2-2;
+        for(let j=ci*(rC+2);j<ci*(rC+2)+rC+2;j++){M[r0*cols+j]=(j%2===0)?1:0;M[(r0+1)*cols+j]=1;}
+      }
+    }
+    for(let ri=0;ri<nrR;ri++){
+      for(let ci=1;ci<nrC;ci++){
+        const c0=ci*rC+ci*2-2;
+        for(let i=ri*(rR+2);i<ri*(rR+2)+rR+2;i++){M[i*cols+c0]=1;M[i*cols+c0+1]=(i%2===0)?0:1;}
+      }
+    }
+  }
+
+  // Module placement
+  function set(r,c,v){if(r<0)r+=rows;if(c<0)c+=cols;if(r<0||r>=rows||c<0||c>=cols)return;if(M[r*cols+c]===-1)M[r*cols+c]=v;}
+  function utah(r,c,b){
+    set(r-2,c-2,(b>>7)&1);set(r-2,c-1,(b>>6)&1);
+    set(r-1,c-2,(b>>5)&1);set(r-1,c-1,(b>>4)&1);set(r-1,c,(b>>3)&1);
+    set(r,c-2,(b>>2)&1);set(r,c-1,(b>>1)&1);set(r,c,(b>>0)&1);
+  }
+  function corner1(b){set(rows-1,0,(b>>7)&1);set(rows-1,1,(b>>6)&1);set(rows-1,2,(b>>5)&1);set(0,cols-2,(b>>4)&1);set(0,cols-1,(b>>3)&1);set(1,cols-1,(b>>2)&1);set(2,cols-1,(b>>1)&1);set(3,cols-1,(b>>0)&1);}
+  function corner2(b){set(rows-3,0,(b>>7)&1);set(rows-2,0,(b>>6)&1);set(rows-1,0,(b>>5)&1);set(0,cols-4,(b>>4)&1);set(0,cols-3,(b>>3)&1);set(0,cols-2,(b>>2)&1);set(0,cols-1,(b>>1)&1);set(1,cols-1,(b>>0)&1);}
+  function corner3(b){set(rows-3,0,(b>>7)&1);set(rows-2,0,(b>>6)&1);set(rows-1,0,(b>>5)&1);set(0,cols-2,(b>>4)&1);set(0,cols-1,(b>>3)&1);set(1,cols-1,(b>>2)&1);set(2,cols-1,(b>>1)&1);set(3,cols-1,(b>>0)&1);}
+  function corner4(b){set(rows-1,0,(b>>7)&1);set(rows-1,cols-1,(b>>6)&1);set(0,cols-3,(b>>5)&1);set(0,cols-2,(b>>4)&1);set(0,cols-1,(b>>3)&1);set(1,cols-3,(b>>2)&1);set(1,cols-2,(b>>1)&1);set(1,cols-1,(b>>0)&1);}
+
+  let si=0,r=4,c=0;
+  do{
+    if(r===rows&&c===0)       corner1(stream[si++]||0);
+    if(r===rows-2&&c===0&&cols%4!==0) corner2(stream[si++]||0);
+    if(r===rows-2&&c===0&&cols%8===4) corner3(stream[si++]||0);
+    if(r===rows+4&&c===2&&cols%8===0) corner4(stream[si++]||0);
+    do{if(r<rows&&c>=0&&M[r*cols+c]===-1)utah(r,c,stream[si++]||0);r-=2;c+=2;}while(r>=0&&c<cols);
+    r+=1;c+=3;
+    do{if(r>=0&&c<cols&&M[r*cols+c]===-1)utah(r,c,stream[si++]||0);r+=2;c-=2;}while(r<rows&&c>=0);
+    r+=3;c+=1;
+  }while(r<rows||c<cols);
+
+  if(M[(rows-1)*cols+(cols-1)]===-1){M[(rows-1)*cols+(cols-1)]=1;M[(rows-2)*cols+(cols-2)]=0;}
+  for(let i=0;i<M.length;i++) if(M[i]===-1)M[i]=0;
+
+  return {M,rows,cols};
+}
+
+function drawDataMatrix(ctx,cmd,scale){
+  const {x,y,data}=cmd;
+  // module is in DOTS — how many label dots each DM cell occupies
+  // Default 15 dots/cell calibrated from real Zebra renderer:
+  // "12345" (10x10 symbol) at x=42 → real bar at x=190 → width=148 dots → 14.8 dots/cell
+  const moduleDots = cmd.module || 15;
+  if(!data) return;
+  let dm;
+  try{ dm=encodeDataMatrix(data); }
+  catch(e){
+    // Fallback placeholder
+    const sz=Math.round(moduleDots*scale);
+    ctx.strokeStyle='#000'; ctx.lineWidth=1;
+    ctx.strokeRect(Math.round(x*scale),Math.round(y*scale),sz*10,sz*10);
+    ctx.fillStyle='#888'; ctx.font='10px sans-serif';
+    ctx.fillText('DM?',Math.round(x*scale)+2,Math.round(y*scale)+12);
+    return;
+  }
+  // mod = pixels per DM cell
+  const mod=Math.max(1, moduleDots*scale*2.5);
+  const ox=Math.round(x*scale), oy=Math.round(y*scale);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(ox, oy, Math.round(dm.cols*mod), Math.round(dm.rows*mod));
+  ctx.fillStyle='#000';
+  for(let r=0;r<dm.rows;r++){
+    for(let c=0;c<dm.cols;c++){
+      if(dm.M[r*dm.cols+c]){
+        const px=Math.round(ox+c*mod), py=Math.round(oy+r*mod);
+        const pw=Math.max(1,Math.round(ox+(c+1)*mod)-px);
+        const ph=Math.max(1,Math.round(oy+(r+1)*mod)-py);
+        ctx.fillRect(px,py,pw,ph);
+      }
+    }
+  }
+}
+
+function drawGW(ctx,cmd,scale){
+  const {x,y,bpr,h}=cmd;
+  const data=cmd.data;  // already decoded binary by parser
+  if(!data) return;
+  const ds=Math.max(1,Math.round(scale));
+  for(let row=0;row<h;row++){
+    for(let bi=0;bi<bpr;bi++){
+      const byte=data.charCodeAt(row*bpr+bi)||0;
+      for(let bit=7;bit>=0;bit--){
+        if(byte&(1<<bit)){
+          const col=bi*8+(7-bit);
+          ctx.fillStyle='#000';
+          ctx.fillRect(Math.round(x*scale)+col*ds,Math.round(y*scale)+row*ds,ds,ds);
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GRID RENDERER
+// ═══════════════════════════════════════════════════════════════════
+function renderGrid(gridCanvas,cfg,zoom,dpi,snapSize){
+  const scale=zoom*(dpi/203);
+  const W=Math.round(cfg.width*scale), H=Math.round(cfg.height*scale);
+  gridCanvas.width=W; gridCanvas.height=H;
+  const ctx=gridCanvas.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  const step=Math.round(snapSize*scale);
+  if(step<4) return; // too dense to show
+  ctx.strokeStyle='rgba(100,140,200,0.18)';
+  ctx.lineWidth=1;
+  for(let x=0;x<W;x+=step){ctx.beginPath();ctx.moveTo(x+0.5,0);ctx.lineTo(x+0.5,H);ctx.stroke();}
+  for(let y=0;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y+0.5);ctx.lineTo(W,y+0.5);ctx.stroke();}
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// BOUNDING BOX
+// ═══════════════════════════════════════════════════════════════════
+function getBB(cmd,scale){
+  const p=d=>Math.round(d*scale);
+  switch(cmd.type){
+    case 'TEXT':{
+      const fh=cmd.font.h*cmd.vMult;
+      const charAdv = getCharAdv(cmd);
+      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(20,p(charAdv*(cmd.data.length||1))),h:Math.max(8,p(fh)),rw:false,rh:false};
+    }
+    case 'BARCODE':{
+      const {bars,isC39}=getBarBits(cmd);
+      const bwDots=bars ? barWidthDots(bars,isC39,cmd.narrow,cmd.wide)*BAR_WIDTH_FACTOR : (cmd.data.length||1)*cmd.narrow*11*BAR_WIDTH_FACTOR;
+      const hriH=cmd.hri ? Math.max(10, Math.round(10*scale)) : 0;
+      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(4,p(bwDots)),h:p(cmd.h)+hriH,rw:false,rh:false};
+    }
+    case 'GRAPHIC_WRITE':
+      return {x:p(cmd.x),y:p(cmd.y),w:p(cmd.bpr*8),h:p(cmd.h),rw:false,rh:false};
+    case 'DATAMATRIX':{
+      let cols=16,rows=16;
+      try{const dm=encodeDataMatrix(cmd.data||'A');cols=dm.cols;rows=dm.rows;}catch(e){}
+      const moduleDots=cmd.module||15;
+      return {x:p(cmd.x),y:p(cmd.y),w:Math.round(p(cols*moduleDots)),h:Math.round(p(rows*moduleDots)),rw:false,rh:false};
+    }
+    case 'BOX_OUTLINE':
+    case 'LINE_OPAQUE':
+    case 'LINE_ERASE':
+      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(4,p(cmd.w)),h:Math.max(4,p(cmd.h)),rw:true,rh:true};
+    case 'LINE_HORIZ':{
+      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(4,p(cmd.w)),h:Math.max(4,p(cmd.t)),rw:true,rh:false};
+    }
+    case 'LINE_VERT':{
+      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(4,p(cmd.t)),h:Math.max(4,p(cmd.h)),rw:false,rh:true};
+    }
+    default: return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SOURCE UPDATER — rewrite the EPL2 line for a command
+// ═══════════════════════════════════════════════════════════════════
+function cmdToEPLLine(cmd){
+  switch(cmd.type){
+    case 'TEXT':
+      return `A${cmd.x},${cmd.y},${cmd.rot},${cmd.fontNum},${cmd.hMult},${cmd.vMult},${cmd.rev?'R':'N'},"${cmd.data}"`;
+    case 'BARCODE':
+      return `B${cmd.x},${cmd.y},${cmd.rot},${cmd.btype},${cmd.narrow},${cmd.wide},${cmd.h},${cmd.hri?'B':'N'},"${cmd.data}"`;
+    case 'DATAMATRIX':
+      return `b${cmd.x},${cmd.y},${cmd.dmtype||'D'},"${cmd.data}"`;
+    case 'BOX_OUTLINE': {
+      const t=cmd.t||3;
+      const x=cmd.x,y=cmd.y,w=cmd.w,h=cmd.h;
+      // LO draws the filled box, LE erases the inside — pure valid EPL2
+      return `LO${x},${y},${w},${h}\nLE${x+t},${y+t},${w-t*2},${h-t*2}`;
+    }
+    case 'LINE_OPAQUE':
+      return `LO${cmd.x},${cmd.y},${cmd.w},${cmd.h}`;
+    case 'LINE_ERASE':
+      return `LE${cmd.x},${cmd.y},${cmd.w},${cmd.h}`;
+    case 'LINE_HORIZ':
+      return `LS${cmd.x},${cmd.y},${cmd.w},${cmd.t}`;
+    case 'LINE_VERT':
+      return `LV${cmd.x},${cmd.y},${cmd.h},${cmd.t}`;
+    case 'GRAPHIC_WRITE':
+      // Use B64: string if present (safe for textarea), else raw binary
+      return `GW${cmd.x},${cmd.y},${cmd.bpr},${cmd.h},${cmd.gwb64||cmd.data}`;
+    default: return '';
+  }
+}
+
+function updateLine(src,lineIdx,newLine){
+  const lines=src.split(/\r?\n/);
+  const newLines=newLine.split('\n');
+  // Replace lineIdx through lineIdx+(existing block size - 1)
+  // Detect block size by checking if next lines are part of the same BOX block
+  let blockSize=1;
+  // BOX_OUTLINE = 2 lines (LO + LE); detect by checking next line is LE inset
+  if(lines[lineIdx] && lines[lineIdx].substring(0,2).toUpperCase()==='LO' &&
+     lines[lineIdx+1] && lines[lineIdx+1].substring(0,2).toUpperCase()==='LE'){
+    // Verify it's a BOX_OUTLINE pair (LE is inset of LO)
+    const lo=lines[lineIdx].slice(2).trim().split(',').map(Number);
+    const le=lines[lineIdx+1].slice(2).trim().split(',').map(Number);
+    const tx=le[0]-lo[0];
+    if(tx>0 && le[1]-lo[1]===tx && lo[2]-le[2]===tx*2 && lo[3]-le[3]===tx*2) blockSize=2;
+  }
+  lines.splice(lineIdx, blockSize, ...newLines);
+  return lines.join('\n');
+}
+
+function insertLine(src,newLine){
+  // Insert before P1 (print command) or at end
+  const lines=src.split(/\r?\n/);
+  let insertAt=lines.length;
+  for(let i=lines.length-1;i>=0;i--){
+    if(lines[i].trim().toUpperCase().startsWith('P')){insertAt=i;break;}
+  }
+  lines.splice(insertAt,0,newLine);
+  return lines.join('\n');
+}
+
+// Get the number of source lines a command occupies (BOX_OUTLINE=2, others=1)
+function cmdLineCount(src, lineIdx){
+  const lines=src.split(/\r?\n/);
+  const raw=(lines[lineIdx]||'').trim();
+  const two=raw.substring(0,2).toUpperCase();
+  if(two==='LO' && lines[lineIdx+1]){
+    const nextTwo=(lines[lineIdx+1]||'').trim().substring(0,2).toUpperCase();
+    if(nextTwo==='LE'){
+      const lo=raw.slice(2).trim().split(',').map(Number);
+      const le=(lines[lineIdx+1]).trim().slice(2).split(',').map(Number);
+      const tx=le[0]-lo[0];
+      if(tx>0&&le[1]-lo[1]===tx&&lo[2]-le[2]===tx*2&&lo[3]-le[3]===tx*2) return 2;
+    }
+  }
+  return 1;
+}
+
+// Move a command block in the EPL source relative to adjacent drawable commands.
+// dir: 'forward'|'back'|'front'|'behind'
+function moveLayer(src, lineIdx, dir){
+  const lines=src.split(/\r?\n/);
+  const count=cmdLineCount(src, lineIdx);
+  const block=lines.splice(lineIdx, count); // remove our block
+
+  // Find indices of all drawable command lines in the remaining array
+  // (skip N, Q, q, R, P, S, D, I, f, F, J, comment lines)
+  const isDrawable=i=>{
+    const r=(lines[i]||'').trim();
+    if(!r||r.startsWith(';')) return false;
+    const one=r[0].toUpperCase();
+    const two=r.substring(0,2).toUpperCase();
+    if(['N','P','Q','S','D','I','F','J'].includes(one)&&r.length<3) return false;
+    if(one==='q'||two==='ZT'||two==='ZB'||one==='R') return false;
+    return true;
+  };
+
+  const drawableIdxs=[];
+  for(let i=0;i<lines.length;i++) if(isDrawable(i)) drawableIdxs.push(i);
+
+  // Find where our block sat among drawables (first drawable at or after lineIdx in original)
+  // After removal, our position would be at lineIdx (or last drawable if lineIdx is past end)
+  let insertAt;
+  if(dir==='front'){
+    // After last drawable
+    insertAt = drawableIdxs.length ? drawableIdxs[drawableIdxs.length-1]+1 : lineIdx;
+  } else if(dir==='behind'){
+    // Before first drawable
+    insertAt = drawableIdxs.length ? drawableIdxs[0] : lineIdx;
+  } else {
+    // Find current position among drawables (nearest drawable at or after lineIdx)
+    const pos=drawableIdxs.findIndex(i=>i>=lineIdx);
+    const cur=pos===-1 ? drawableIdxs.length-1 : pos;
+    if(dir==='forward'){
+      // Move after next drawable block
+      const nextIdx=drawableIdxs[cur+1];
+      if(nextIdx===undefined){ insertAt=drawableIdxs[drawableIdxs.length-1]+1; }
+      else {
+        // Skip over the next block (could be 2 lines for BOX_OUTLINE)
+        const nextCount=cmdLineCount(lines.join('\n'), nextIdx);
+        insertAt=nextIdx+nextCount;
+      }
+    } else { // back
+      // Move before previous drawable block
+      const prevIdx=drawableIdxs[cur-1];
+      if(prevIdx===undefined){ insertAt=drawableIdxs[0]; }
+      else { insertAt=prevIdx; }
+    }
+  }
+
+  lines.splice(insertAt, 0, ...block);
+  return lines.join('\n');
+}
+
+function deleteLine(src,lineIdx){
+  const lines=src.split(/\r?\n/);
+  lines.splice(lineIdx,1);
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SNAPPING
+// ═══════════════════════════════════════════════════════════════════
+function snap(val,grid){
+  if(!grid||grid<=0) return Math.round(val);
+  return Math.round(val/grid)*grid;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROPERTIES PANEL
+// ═══════════════════════════════════════════════════════════════════
+function buildPropsPanel(cmd,onUpdate,onDelete,onLayer){
+  const content=document.getElementById('props-content');
+  const label=document.getElementById('props-type-label');
+  const noSel=document.getElementById('no-selection');
+  content.innerHTML='';
+
+  if(!cmd){label.textContent='';content.style.display='none';noSel.style.display='block';return;}
+  content.style.display='block';noSel.style.display='none';
+
+  const typeNames={BOX_OUTLINE:'Outline Box',TEXT:'Text',BARCODE:'Barcode',DATAMATRIX:'Data Matrix',GRAPHIC_WRITE:'Image (GW)',LINE_OPAQUE:'Filled Box',LINE_ERASE:'Erase Box',LINE_HORIZ:'H-Line',LINE_VERT:'V-Line'};
+  label.textContent=typeNames[cmd.type]||cmd.type;
+
+  function row(label,input){
+    const d=document.createElement('div');d.className='prop-row';
+    const l=document.createElement('span');l.className='prop-label';l.textContent=label;
+    d.appendChild(l);d.appendChild(input);return d;
+  }
+  function numInput(val,min,max,key,w){
+    const i=document.createElement('input');i.type='number';i.className='prop-input';i.value=val;
+    if(min!==undefined)i.min=min;if(max!==undefined)i.max=max;if(w)i.style.width=w+'px';
+    i.addEventListener('change',()=>{cmd[key]=parseInt(i.value)||0;onUpdate(cmd);});
+    return i;
+  }
+  function textInput(val,key){
+    const i=document.createElement('input');i.type='text';i.className='prop-input full';i.value=val;
+    i.addEventListener('input',()=>{cmd[key]=i.value;onUpdate(cmd);});
+    return i;
+  }
+  function selectInput(val,options,key){
+    const s=document.createElement('select');s.className='prop-select';
+    for(const [v,l] of options){const o=document.createElement('option');o.value=v;o.textContent=l;if(v==val)o.selected=true;s.appendChild(o);}
+    s.addEventListener('change',()=>{
+      cmd[key]=isNaN(+s.value)?s.value:+s.value;
+      if(key==='fontNum'){cmd.font=EPL_FONTS[cmd.fontNum]||FONT1;}
+      onUpdate(cmd);
+    });
+    return s;
+  }
+
+  // ── Position section ──
+  const posSection=document.createElement('div');posSection.className='prop-section';
+  const posTitle=document.createElement('div');posTitle.className='prop-section-title';posTitle.textContent='Position';
+  posSection.appendChild(posTitle);
+  const xRow=document.createElement('div');xRow.className='prop-row';
+  const xl=document.createElement('span');xl.className='prop-label';xl.textContent='X';
+  const xi=document.createElement('input');xi.type='number';xi.className='prop-input';xi.value=cmd.x||0;xi.min=0;xi.style.width='70px';
+  xi.id='prop-x';
+  const yl=document.createElement('span');yl.className='prop-label';yl.style.marginLeft='4px';yl.textContent='Y';
+  const yi=document.createElement('input');yi.type='number';yi.className='prop-input';yi.value=cmd.y||0;yi.min=0;yi.style.width='70px';
+  yi.id='prop-y';
+  xi.addEventListener('change',()=>{cmd.x=parseInt(xi.value)||0;onUpdate(cmd);});
+  yi.addEventListener('change',()=>{cmd.y=parseInt(yi.value)||0;onUpdate(cmd);});
+  xRow.append(xl,xi,yl,yi);posSection.appendChild(xRow);
+  content.appendChild(posSection);
+
+  // ── Type-specific sections ──
+  if(cmd.type==='TEXT'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t=document.createElement('div');t.className='prop-section-title';t.textContent='Text';
+    sec.appendChild(t);
+    const dataRow=document.createElement('div');dataRow.className='prop-row';
+    const dl=document.createElement('span');dl.className='prop-label';dl.textContent='Content';
+    const di=textInput(cmd.data,'data');
+    dataRow.append(dl,di);sec.appendChild(dataRow);
+    sec.appendChild(row('Font',selectInput(cmd.fontNum,[[1,'1 (6×8)'],[2,'2 (10×16)'],[3,'3 (12×20)'],[4,'4 (14×24)'],[5,'5 (32×48)']],'fontNum')));
+    sec.appendChild(row('H mult',numInput(cmd.hMult,1,8,'hMult',60)));
+    sec.appendChild(row('V mult',numInput(cmd.vMult,1,8,'vMult',60)));
+    sec.appendChild(row('Rotation',selectInput(cmd.rot,[[0,'0°'],[1,'90°'],[2,'180°'],[3,'270°']],'rot')));
+    const revRow=document.createElement('div');revRow.className='prop-row';
+    const rl=document.createElement('span');rl.className='prop-label';rl.textContent='Reverse';
+    const rc=document.createElement('input');rc.type='checkbox';rc.className='prop-checkbox';rc.checked=cmd.rev;
+    rc.addEventListener('change',()=>{cmd.rev=rc.checked;onUpdate(cmd);});
+    revRow.append(rl,rc);sec.appendChild(revRow);
+    content.appendChild(sec);
+  }
+
+  if(cmd.type==='BARCODE'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t=document.createElement('div');t.className='prop-section-title';t.textContent='Barcode';sec.appendChild(t);
+    const dataRow=document.createElement('div');dataRow.className='prop-row';
+    const dl=document.createElement('span');dl.className='prop-label';dl.textContent='Data';
+    const di=textInput(cmd.data,'data');dataRow.append(dl,di);sec.appendChild(dataRow);
+    sec.appendChild(row('Type',selectInput(cmd.btype,[['1','Code 128 (auto)'],['2','Code 39'],['3','Code 39 +chk'],['A','Code 128B'],['F','EAN-13'],['G','UPC-A']],'btype')));
+    sec.appendChild(row('Height',numInput(cmd.h,1,999,'h',60)));
+    sec.appendChild(row('Narrow',numInput(cmd.narrow,1,10,'narrow',60)));
+    sec.appendChild(row('Wide',numInput(cmd.wide,1,20,'wide',60)));
+    sec.appendChild(row('Rotation',selectInput(cmd.rot,[[0,'0°'],[1,'90°'],[2,'180°'],[3,'270°']],'rot')));
+    const hriRow=document.createElement('div');hriRow.className='prop-row';
+    const hl=document.createElement('span');hl.className='prop-label';hl.textContent='Show text';
+    const hc=document.createElement('input');hc.type='checkbox';hc.className='prop-checkbox';hc.checked=cmd.hri;
+    hc.addEventListener('change',()=>{cmd.hri=hc.checked;onUpdate(cmd);});
+    hriRow.append(hl,hc);sec.appendChild(hriRow);
+    content.appendChild(sec);
+  }
+
+  
+  if(cmd.type==='GRAPHIC_WRITE'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t=document.createElement('div');t.className='prop-section-title';t.textContent='Image (GW)';sec.appendChild(t);
+    const info=document.createElement('div');info.style.cssText='font-size:10px;color:#8ab;margin-bottom:6px;';
+    info.textContent=`${cmd.bpr*8}×${cmd.h} dots · ${cmd.bpr} bytes/row`;
+    sec.appendChild(info);
+    const copyBtn=document.createElement('button');copyBtn.className='prop-del';
+    copyBtn.style.background='#1a3a5a';copyBtn.style.borderColor='#2a4a7a';copyBtn.style.color='#ccd';
+    copyBtn.textContent='Copy GW Command';
+    copyBtn.addEventListener('click',()=>{
+      // GW data is binary — download as file rather than clipboard (binary survives)
+      const line=`GW${cmd.x},${cmd.y},${cmd.bpr},${cmd.h},${cmd.data}`;
+      const bytes=new Uint8Array(line.length);
+      for(let i=0;i<line.length;i++) bytes[i]=line.charCodeAt(i)&0xFF;
+      const blob=new Blob([bytes],{type:'application/octet-stream'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download='gw_command.bin';
+      a.click(); URL.revokeObjectURL(url);
+      copyBtn.textContent='Downloaded!';
+      setTimeout(()=>copyBtn.textContent='Download GW Command',1500);
+    });
+    copyBtn.textContent='Download GW Command';
+    sec.appendChild(copyBtn);
+    content.appendChild(sec);
+  }
+
+  if(cmd.type==='DATAMATRIX'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t=document.createElement('div');t.className='prop-section-title';t.textContent='Data Matrix';sec.appendChild(t);
+    const dataRow=document.createElement('div');dataRow.className='prop-row';
+    const dl=document.createElement('span');dl.className='prop-label';dl.textContent='Data';
+    const di=textInput(cmd.data,'data');dataRow.append(dl,di);sec.appendChild(dataRow);
+    sec.appendChild(row('Module',numInput(cmd.module,1,20,'module',60)));
+    content.appendChild(sec);
+  }
+
+  if(cmd.type==='BOX_OUTLINE'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t2=document.createElement('div');t2.className='prop-section-title';t2.textContent='Outline Box';sec.appendChild(t2);
+    sec.appendChild(row('X',numInput(cmd.x,0,9999,'x')));
+    sec.appendChild(row('Y',numInput(cmd.y,0,9999,'y')));
+    sec.appendChild(row('Width',numInput(cmd.w,1,9999,'w')));
+    sec.appendChild(row('Height',numInput(cmd.h,1,9999,'h')));
+    sec.appendChild(row('Thickness',numInput(cmd.t||3,1,50,'t')));
+    content.appendChild(sec);
+  }
+
+  if(cmd.type==='LINE_OPAQUE'||cmd.type==='LINE_ERASE'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t=document.createElement('div');t.className='prop-section-title';t.textContent='Size';sec.appendChild(t);
+    sec.appendChild(row('Width',numInput(cmd.w,1,9999,'w',70)));
+    sec.appendChild(row('Height',numInput(cmd.h,1,9999,'h',70)));
+    content.appendChild(sec);
+  }
+  if(cmd.type==='LINE_HORIZ'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t=document.createElement('div');t.className='prop-section-title';t.textContent='Size';sec.appendChild(t);
+    sec.appendChild(row('Width',numInput(cmd.w,1,9999,'w',70)));
+    sec.appendChild(row('Thickness',numInput(cmd.t,1,100,'t',70)));
+    content.appendChild(sec);
+  }
+  if(cmd.type==='LINE_VERT'){
+    const sec=document.createElement('div');sec.className='prop-section';
+    const t=document.createElement('div');t.className='prop-section-title';t.textContent='Size';sec.appendChild(t);
+    sec.appendChild(row('Height',numInput(cmd.h,1,9999,'h',70)));
+    sec.appendChild(row('Thickness',numInput(cmd.t,1,100,'t',70)));
+    content.appendChild(sec);
+  }
+
+  // ── Delete ──
+  const delSec=document.createElement('div');delSec.className='prop-section';
+  // Layer order buttons
+  const layerSec=document.createElement('div');layerSec.className='prop-section';
+  const layerRow=document.createElement('div');layerRow.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-bottom:4px;';
+  function layerBtn(label,title,fn){
+    const b=document.createElement('button');
+    b.className='tb-btn';b.textContent=label;b.title=title;
+    b.style.cssText='font-size:10px;padding:3px 2px;';
+    b.onclick=fn; return b;
+  }
+  layerRow.appendChild(layerBtn('⤒ Front','Bring to front',()=>onLayer('front')));
+  layerRow.appendChild(layerBtn('↑ Fwd','Bring forward one',()=>onLayer('forward')));
+  layerRow.appendChild(layerBtn('↓ Back','Send back one',()=>onLayer('back')));
+  layerRow.appendChild(layerBtn('⤓ Behind','Send to back',()=>onLayer('behind')));
+  layerSec.appendChild(layerRow);
+  content.appendChild(layerSec);
+
+  const delBtn=document.createElement('button');delBtn.className='prop-del';delBtn.textContent='Delete Element';
+  delBtn.onclick=onDelete;delSec.appendChild(delBtn);content.appendChild(delSec);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════════════════
+const state={
+  zoom:1.5, dpi:203,
+  activeTool:'select',
+  snapEnabled:true, snapSize:5, showGrid:false,
+  parsed:null,
+  selectedIdx:null,
+  currentPage:0,
+};
+
+const canvas    = document.getElementById('label-canvas');
+const gridCvs   = document.getElementById('grid-canvas');
+const overlay   = document.getElementById('overlay');
+const eplInput  = document.getElementById('epl-input');
+const lineNums  = document.getElementById('epl-line-nums');
+
+// Track which line(s) are highlighted (set by buildPropsPanel / selection)
+let _hlLines = new Set();  // set of 0-based line indices (in current page src)
+
+function updateEditorGutter(){
+  // Get the current page's source to count lines correctly
+  const pageSrc = getPageSrc(eplInput.value, state.currentPage||0);
+  const lines = pageSrc.split('\n');
+  const totalLines = lines.length;
+
+  // Sync scroll between textarea and gutter
+  // (textarea scrollTop maps directly since same font/line-height)
+  const scrollTop = eplInput.scrollTop;
+
+  // Line numbers
+  lineNums.innerHTML = lines.map((_,i) => {
+    const isHl = _hlLines.has(i);
+    return `<span class="ln${isHl?' hl':''}">${i+1}</span>`;
+  }).join('');
+  lineNums.scrollTop = scrollTop;
+
+}
+
+// Sync on scroll
+eplInput.addEventListener('scroll', updateEditorGutter);
+eplInput.addEventListener('input', updateEditorGutter);
+
+// Scroll textarea to a specific line
+function scrollToLine(lineIdx){
+  const lineHeight = parseFloat(getComputedStyle(eplInput).lineHeight);
+  const padding = 8;
+  const targetScroll = lineIdx * lineHeight + padding - eplInput.clientHeight / 3;
+  eplInput.scrollTop = Math.max(0, targetScroll);
+  updateEditorGutter();
+}
+
+// Set highlighted lines, scroll to first, and select the text range in the textarea
+function setHighlightedLines(lineIndices){
+  _hlLines = new Set(lineIndices);
+  updateEditorGutter();
+  if(lineIndices.length === 0) return;
+
+  // Select the actual text of the highlighted lines so browser shows native highlight
+  const pageSrc = getPageSrc(eplInput.value, state.currentPage||0);
+  const lines = pageSrc.split('\n');
+  
+  // Find the char offset of the page within the full source
+  const fullSrc = eplInput.value;
+  const pages = splitPages(fullSrc);
+  let pageOffset = 0;
+  for(let i = 0; i < (state.currentPage||0); i++){
+    pageOffset += pages[i].length + 1; // +1 for the joining newline
+  }
+
+  // Find char start/end of the line range
+  const firstLine = Math.min(...lineIndices);
+  const lastLine = Math.max(...lineIndices);
+  let charStart = pageOffset;
+  for(let i = 0; i < firstLine; i++) charStart += lines[i].length + 1;
+  let charEnd = pageOffset;
+  for(let i = 0; i <= lastLine; i++) charEnd += lines[i].length + 1;
+  charEnd -= 1; // don't include trailing newline
+
+  eplInput.focus();
+  eplInput.setSelectionRange(charStart, charEnd);
+  scrollToLine(firstLine);
+}
+const parseError= document.getElementById('parse-error');
+const zoomDisp  = document.getElementById('zoom-display');
+const wrap      = document.getElementById('canvas-wrap');
+const infoMode  = document.getElementById('info-mode');
+const snapInfo  = document.getElementById('snap-info');
+
+// ── RENDER ───────────────────────────────────────────────────────
+function render(){
+  parseError.textContent='';
+  try{
+    // Split full source into pages, render only the current page
+    const pages=splitPages(eplInput.value);
+    const pageCount=pages.length;
+    console.log('render: pageCount=', pageCount, 'currentPage=', state.currentPage, 'src length=', eplInput.value.length);
+    state.currentPage=Math.min(state.currentPage, pageCount-1);
+    const pageSrc=pages[state.currentPage];
+
+    const result=parseEPL2(pageSrc);
+    state.parsed=result;
+    state.dpi=parseInt(document.getElementById('sel-dpi').value)||203;
+    renderEPL2(result.cmds,result.cfg,canvas,state.zoom,state.dpi);
+    if(state.showGrid) renderGrid(gridCvs,result.cfg,state.zoom,state.dpi,state.snapSize);
+    else {gridCvs.width=canvas.width;gridCvs.height=canvas.height;const g=gridCvs.getContext('2d');g.clearRect(0,0,gridCvs.width,gridCvs.height);}
+    document.getElementById('info-size').textContent=`${result.cfg.width}×${result.cfg.height} dots`;
+    document.getElementById('info-dpi').textContent=state.dpi;
+
+    // Update page nav
+    document.getElementById('page-label').textContent=`Page ${state.currentPage+1} / ${pageCount}`;
+    document.getElementById('btn-page-prev').disabled=(state.currentPage===0);
+    document.getElementById('btn-page-next').disabled=(state.currentPage>=pageCount-1);
+    document.getElementById('btn-page-del').disabled=(pageCount<=1);
+
+    buildOverlay();
+    updateEditorGutter();
+  }catch(e){parseError.textContent=e.message;}
+}
+
+// ── OVERLAY ──────────────────────────────────────────────────────
+function buildOverlay(){
+  overlay.innerHTML='';
+  overlay.style.width=canvas.width+'px';
+  overlay.style.height=canvas.height+'px';
+  overlay.className=(state.activeTool!=='select')?'active':'active';
+
+  if(!state.parsed) return;
+  const scale=state.zoom*(state.dpi/203);
+  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT'];
+
+  state.parsed.cmds.forEach((cmd,idx)=>{
+    if(!draggable.includes(cmd.type)) return;
+    const bb=getBB(cmd,scale);
+    if(!bb) return;
+    const el=document.createElement('div');
+    el.className='dh'+(state.selectedIdx===idx?' sel':'');
+    el.style.cssText=`left:${bb.x}px;top:${bb.y}px;width:${bb.w}px;height:${bb.h}px`;
+    el.dataset.idx=idx;
+    el.addEventListener('mousedown',e=>onDragStart(e,idx));
+    // Resize handles
+    if(state.selectedIdx===idx){
+      if(bb.rw||bb.rh){
+        if(bb.rw&&bb.rh){const r=makeResizeHandle('rh-br',idx,'br');el.appendChild(r);}
+        else if(bb.rw){const r=makeResizeHandle('rh-r',idx,'r');el.appendChild(r);}
+        else if(bb.rh){const r=makeResizeHandle('rh-b',idx,'b');el.appendChild(r);}
+      }
+    }
+    overlay.appendChild(el);
+  });
+}
+
+function makeResizeHandle(className,idx,dir){
+  const r=document.createElement('div');
+  r.className='rh '+className;
+  r.addEventListener('mousedown',e=>{e.stopPropagation();onResizeStart(e,idx,dir);});
+  return r;
+}
+
+// ── DRAG ─────────────────────────────────────────────────────────
+function onDragStart(e,idx){
+  e.preventDefault();e.stopPropagation();
+  state.selectedIdx=idx;
+  const cmd=state.parsed.cmds[idx];
+  if(!cmd) return;
+
+  // Highlight the selected element's line(s) in the source editor
+  const hlIdxs=[cmd.lineIdx];
+  if(cmd.type==='BOX_OUTLINE') hlIdxs.push(cmd.lineIdx+1);
+  setHighlightedLines(hlIdxs);
+
+  const scale=state.zoom*(state.dpi/203);
+  const sx=e.clientX, sy=e.clientY;
+  const ox=cmd.x||0, oy=cmd.y||0;
+  const grid=state.snapEnabled?state.snapSize:0;
+
+  buildOverlay();
+  buildPropsPanel(cmd,onPropUpdate,()=>onDelete(idx),(dir)=>{
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,dir));
+    render();
+    // After reorder, re-select by matching x,y,type
+    if(state.parsed){
+      const newIdx=state.parsed.cmds.findIndex(c=>c.type===cmd.type&&c.x===cmd.x&&c.y===cmd.y);
+      if(newIdx>=0){
+        state.selectedIdx=newIdx;
+        buildOverlay();
+        buildPropsPanel(state.parsed.cmds[newIdx],onPropUpdate,()=>onDelete(newIdx),(dir2)=>{
+          eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),state.parsed.cmds[newIdx].lineIdx,dir2));
+          render();
+        });
+      }
+    }
+  });
+
+  const el=overlay.querySelector(`[data-idx="${idx}"]`);
+  if(el) el.classList.add('dragging');
+
+  function move(ev){
+    const dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
+    const nx=Math.max(0,snap(ox+dx,grid));
+    const ny=Math.max(0,snap(oy+dy,grid));
+    cmd.x=nx; cmd.y=ny;
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
+    render();
+    // update props x/y inputs live
+    const px=document.getElementById('prop-x'),py=document.getElementById('prop-y');
+    if(px) px.value=nx; if(py) py.value=ny;
+  }
+  function up(){
+    document.removeEventListener('mousemove',move);
+    document.removeEventListener('mouseup',up);
+    buildOverlay();
+  }
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseup',up);
+}
+
+// ── RESIZE ───────────────────────────────────────────────────────
+function onResizeStart(e,idx,dir){
+  e.preventDefault();
+  const cmd=state.parsed.cmds[idx];
+  if(!cmd) return;
+  const scale=state.zoom*(state.dpi/203);
+  const sx=e.clientX,sy=e.clientY;
+  const ow=cmd.w||cmd.h||50, oh=cmd.h||50;
+  const grid=state.snapEnabled?state.snapSize:0;
+
+  function move(ev){
+    const dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
+    if(dir==='br'||dir==='r'){cmd.w=Math.max(1,snap(ow+dx,grid));}
+    if(dir==='br'||dir==='b'){cmd.h=Math.max(1,snap(oh+dy,grid));}
+    // For LINE_HORIZ resize width in 'w', thickness in h via t
+    if(cmd.type==='LINE_HORIZ'&&dir==='r') cmd.w=Math.max(1,snap(ow+dx,grid));
+    if(cmd.type==='LINE_VERT'&&dir==='b') cmd.h=Math.max(1,snap(oh+dy,grid));
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
+    render();
+    buildPropsPanel(cmd,onPropUpdate,()=>onDelete(idx),(dir)=>{
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,dir));
+    render();
+    // After reorder, re-select by matching x,y,type
+    if(state.parsed){
+      const newIdx=state.parsed.cmds.findIndex(c=>c.type===cmd.type&&c.x===cmd.x&&c.y===cmd.y);
+      if(newIdx>=0){
+        state.selectedIdx=newIdx;
+        buildOverlay();
+        buildPropsPanel(state.parsed.cmds[newIdx],onPropUpdate,()=>onDelete(newIdx),(dir2)=>{
+          eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),state.parsed.cmds[newIdx].lineIdx,dir2));
+          render();
+        });
+      }
+    }
+  });
+  }
+  function up(){document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);}
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseup',up);
+}
+
+// ── PROP UPDATE ───────────────────────────────────────────────────
+function onPropUpdate(cmd){
+  eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
+  render();
+}
+
+// ── DELETE ────────────────────────────────────────────────────────
+function onDelete(idx){
+  if(!state.parsed) return;
+  const cmd=state.parsed.cmds[idx];
+  if(!cmd||cmd.lineIdx===undefined) return;
+  eplInput.value=setPageSrc(eplInput.value,state.currentPage,deleteLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx));
+  state.selectedIdx=null;
+  buildPropsPanel(null,null,null);
+  render();
+}
+
+// ── PLACE TOOL — click on canvas to add element ──────────────────
+overlay.addEventListener('mousedown',e=>{
+  if(state.activeTool==='select') return;
+  e.preventDefault();
+  const rect=overlay.getBoundingClientRect();
+  const scale=state.zoom*(state.dpi/203);
+  const grid=state.snapEnabled?state.snapSize:0;
+  const dotX=snap((e.clientX-rect.left)/scale,grid);
+  const dotY=snap((e.clientY-rect.top)/scale,grid);
+
+  let newCmd=null;
+  let newLine='';
+
+  if(state.activeTool==='text'){
+    newCmd={type:'TEXT',x:dotX,y:dotY,rot:0,fontNum:3,font:EPL_FONTS[3],hMult:1,vMult:1,rev:false,data:'New Text'};
+  } else if(state.activeTool==='hline'){
+    newCmd={type:'LINE_OPAQUE',x:dotX,y:dotY,w:200,h:3};
+  } else if(state.activeTool==='vline'){
+    newCmd={type:'LINE_OPAQUE',x:dotX,y:dotY,w:3,h:100};
+  } else if(state.activeTool==='box'){
+    newCmd={type:'LINE_OPAQUE',x:dotX,y:dotY,w:100,h:50};
+  } else if(state.activeTool==='box-outline'){
+    newCmd={type:'BOX_OUTLINE',x:dotX,y:dotY,w:100,h:50,t:3};
+  } else if(state.activeTool==='barcode'){
+    newCmd={type:'BARCODE',x:dotX,y:dotY,rot:0,btype:'A',narrow:2,wide:5,h:80,hri:true,data:'12345678'};
+  } else if(state.activeTool==='datamatrix'){
+    newCmd={type:'DATAMATRIX',x:dotX,y:dotY,dmtype:'D',module:15,data:'12345'};
+  } else if(state.activeTool==='image'){
+    window.openImageModal(dotX,dotY);
+    setTool('select');
+    return;
+  }
+
+  if(!newCmd) return;
+  newLine=cmdToEPLLine(newCmd);
+
+  // Insert into source, find new lineIdx by parsing
+  eplInput.value=setPageSrc(eplInput.value,state.currentPage,insertLine(getPageSrc(eplInput.value,state.currentPage),newLine));
+  render();
+
+  // Find the newly added command and select it
+  if(state.parsed){
+    // The new cmd will be the one matching newLine
+    const newIdx=state.parsed.cmds.findIndex(c=>cmdToEPLLine(c)===newLine&&c.x===dotX&&c.y===dotY);
+    if(newIdx>=0){
+      state.selectedIdx=newIdx;
+      buildPropsPanel(state.parsed.cmds[newIdx],onPropUpdate,()=>onDelete(newIdx));
+      buildOverlay();
+    }
+  }
+
+  // Switch to select after placing
+  setTool('select');
+});
+
+// ── PLACE PREVIEW — ghost element while hovering in place mode ───
+let ghostEl=null;
+overlay.addEventListener('mousemove',e=>{
+  const rect=overlay.getBoundingClientRect();
+  const scale=state.zoom*(state.dpi/203);
+  const grid=state.snapEnabled?state.snapSize:0;
+  const dotX=snap((e.clientX-rect.left)/scale,grid);
+  const dotY=snap((e.clientY-rect.top)/scale,grid);
+  document.getElementById('info-cursor').textContent=`${dotX}, ${dotY} dots`;
+
+  if(state.activeTool==='select'){
+    if(ghostEl){ghostEl.remove();ghostEl=null;}
+    return;
+  }
+
+  if(!ghostEl){ghostEl=document.createElement('div');ghostEl.style.cssText='position:absolute;border:2px dashed rgba(233,200,50,0.7);background:rgba(233,200,50,0.07);pointer-events:none;';overlay.appendChild(ghostEl);}
+  const px=d=>Math.round(d*scale);
+  let gx=px(dotX),gy=px(dotY),gw=40,gh=20;
+  if(state.activeTool==='text'){gw=px(12*20);gh=px(20);}
+  else if(state.activeTool==='hline'){gw=px(200);gh=px(3);}
+  else if(state.activeTool==='vline'){gw=px(3);gh=px(100);}
+  else if(state.activeTool==='box'||state.activeTool==='box-outline'){gw=px(100);gh=px(50);}
+  else if(state.activeTool==='barcode'){gw=px(2*11*8);gh=px(80);}
+  else if(state.activeTool==='datamatrix'){gw=px(2*26);gh=px(2*26);}
+  ghostEl.style.left=gx+'px'; ghostEl.style.top=gy+'px';
+  ghostEl.style.width=gw+'px'; ghostEl.style.height=gh+'px';
+});
+
+overlay.addEventListener('mouseleave',()=>{if(ghostEl){ghostEl.remove();ghostEl=null;}});
+
+// Also track cursor on canvas for non-place modes
+canvas.addEventListener('mousemove',e=>{
+  if(state.activeTool!=='select') return;
+  const rect=canvas.getBoundingClientRect();
+  const scale=state.zoom*(state.dpi/203);
+  const grid=state.snapEnabled?state.snapSize:0;
+  const dotX=snap((e.clientX-rect.left)/scale,grid);
+  const dotY=snap((e.clientY-rect.top)/scale,grid);
+  document.getElementById('info-cursor').textContent=`${dotX}, ${dotY} dots`;
+});
+
+// Click on canvas bg in select mode = deselect
+overlay.addEventListener('mousedown',e=>{
+  if(state.activeTool!=='select') return;
+  if(e.target===overlay){
+    state.selectedIdx=null;
+    buildPropsPanel(null,null,null);
+    buildOverlay();
+  }
+});
+
+// ── TOOL SWITCHER ─────────────────────────────────────────────────
+function setTool(name){
+  state.activeTool=name;
+  if(name==='image'){
+    window.openImageModal(50,50);
+    // Don't keep tool active — revert to select after modal opens
+    state.activeTool='select';
+    name='select';
+  }
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.toggle('active',b.dataset.tool===name));
+  wrap.className='canvas-wrap '+(name==='select'?'mode-select':'mode-place');
+  overlay.className='active';
+  infoMode.textContent=name!=='select'?`Placing: ${name} — click label to add`:'';
+  if(ghostEl){ghostEl.remove();ghostEl=null;}
+  buildOverlay();
+}
+document.querySelectorAll('.tool-btn').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+
+// ── SNAP CONTROLS ─────────────────────────────────────────────────
+const chkSnap=document.getElementById('chk-snap');
+const snapSizeInput=document.getElementById('snap-size');
+const chkGrid=document.getElementById('chk-grid');
+
+chkSnap.addEventListener('change',()=>{
+  state.snapEnabled=chkSnap.checked;
+  snapInfo.textContent=state.snapEnabled?`Snap: ${state.snapSize}dots`:'';
+  render();
+});
+snapSizeInput.addEventListener('change',()=>{
+  state.snapSize=Math.max(1,parseInt(snapSizeInput.value)||5);
+  snapInfo.textContent=state.snapEnabled?`Snap: ${state.snapSize}dots`:'';
+  if(state.showGrid) render();
+});
+chkGrid.addEventListener('change',()=>{
+  state.showGrid=chkGrid.checked;
+  render();
+});
+snapInfo.textContent=`Snap: ${state.snapSize}dots`;
+
+// ── ZOOM ──────────────────────────────────────────────────────────
+// zoom=1.0 = 1 px/dot. Real Zebra renderer confirmed at 1.0 px/dot:
+// user verified LO250 in ours == LO325 in real when we were at zoom=1.313 (1.313≈325/250).
+// At zoom=1.0, dot N -> pixel N, coordinates match the real renderer exactly.
+const ZEBRA_DEFAULT_ZOOM = 1.0;
+function zoomToFit(){
+  const panel=document.getElementById('canvas-panel');
+  if(!state.parsed) return;
+  const s=state.dpi/203;
+  const z=Math.min(
+    (panel.clientWidth  - 40) / (state.parsed.cfg.width  * s),
+    (panel.clientHeight - 40) / (state.parsed.cfg.height * s)
+  );
+  setZoom(Math.max(0.2, z));
+}
+function setZoom(z){
+  state.zoom=Math.min(5,Math.max(0.2,z));
+  zoomDisp.textContent=Math.round(state.zoom*100)+'%';
+  render();
+}
+document.getElementById('btn-zoom-in').onclick=()=>setZoom(state.zoom*1.2);
+document.getElementById('btn-zoom-out').onclick=()=>setZoom(state.zoom/1.2);
+document.getElementById('btn-zoom-fit').onclick=zoomToFit;
+
+// ── RENDER TRIGGER ────────────────────────────────────────────────
+document.getElementById('btn-render').onclick=render;
+
+document.getElementById('btn-page-prev').addEventListener('click',()=>{
+  if(state.currentPage>0){state.currentPage--;render();}
+});
+document.getElementById('btn-page-next').addEventListener('click',()=>{
+  const pages=splitPages(eplInput.value);
+  if(state.currentPage<pages.length-1){state.currentPage++;render();}
+});
+document.getElementById('btn-page-add').addEventListener('click',()=>{
+  // Duplicate current page's config commands (q, Q, R, ZT) into new page
+  const pages=splitPages(eplInput.value);
+  console.log('Before add: pages=', pages.length, 'currentPage=', state.currentPage);
+  const curPage=pages[state.currentPage];
+  const cfgLines=curPage.split(/\r?\n/).filter(l=>{
+    const t=l.trim(); const one=t[0]||'';
+    return t==='N'||one==='q'||one==='Q'||one==='R'||t==='ZT'||t==='ZB';
+  });
+  const newPage=cfgLines.join('\n')+'\nP1';
+  pages.splice(state.currentPage+1,0,newPage);
+  eplInput.value=joinPages(pages);
+  state.currentPage++;
+  render();
+});
+document.getElementById('btn-page-del').addEventListener('click',()=>{
+  const pages=splitPages(eplInput.value);
+  if(pages.length<=1) return;
+  pages.splice(state.currentPage,1);
+  state.currentPage=Math.min(state.currentPage,pages.length-1);
+  eplInput.value=joinPages(pages);
+  render();
+});
+eplInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();render();}});
+let rtimer;
+eplInput.addEventListener('input',()=>{clearTimeout(rtimer);rtimer=setTimeout(render,500);});
+document.getElementById('sel-dpi').addEventListener('change',render);
+
+// ── LABEL SIZE ────────────────────────────────────────────────────
+const LABEL_SIZES = {
+  '4x4': {w:812,  h:812,  gap:25},
+  '4x5': {w:812,  h:1015, gap:25},
+  '4x6': {w:812,  h:1218, gap:25},
+  '6x4': {w:1218, h:812,  gap:25},
+};
+document.getElementById('sel-size').addEventListener('change', function(){
+  const sz = LABEL_SIZES[this.value];
+  if(!sz) return;
+  // Update q and Q lines in the EPL source
+  let epl = eplInput.value;
+  epl = epl.replace(/^q\d+$/m,  `q${sz.w}`);
+  epl = epl.replace(/^Q\d+,\d+$/m, `Q${sz.h},${sz.gap}`);
+  eplInput.value = epl;
+  render();
+});
+
+// ── KEYBOARD SHORTCUTS ────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(document.activeElement===eplInput||document.activeElement.tagName==='INPUT') return;
+
+  // Tool shortcuts
+  if(e.key==='v'||e.key==='Escape'){setTool('select');return;}
+  if(e.key==='t'){setTool('text');return;}
+  if(e.key==='h'){setTool('hline');return;}
+  if(e.key==='l'){setTool('vline');return;}
+  if(e.key==='b'){setTool('box');return;}
+  if(e.key==='o'){setTool('box-outline');return;}
+  if(e.key==='c'){setTool('barcode');return;}
+  if(e.key==='m'){setTool('datamatrix');return;}
+
+  // Arrow nudge on selected element
+  if(state.selectedIdx===null||!state.parsed) return;
+  const cmd=state.parsed.cmds[state.selectedIdx];
+  if(!cmd) return;
+  const grid=state.snapEnabled?state.snapSize:0;
+  const step=e.shiftKey?(grid||10):(grid||1);
+  let dx=0,dy=0;
+  if(e.key==='ArrowLeft')dx=-step;
+  if(e.key==='ArrowRight')dx=step;
+  if(e.key==='ArrowUp')dy=-step;
+  if(e.key==='ArrowDown')dy=step;
+  if(e.key==='Delete'||e.key==='Backspace'){onDelete(state.selectedIdx);return;}
+  if(!dx&&!dy) return;
+  e.preventDefault();
+  cmd.x=Math.max(0,(cmd.x||0)+dx);
+  cmd.y=Math.max(0,(cmd.y||0)+dy);
+  eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
+  render();
+  buildPropsPanel(cmd,onPropUpdate,()=>onDelete(state.selectedIdx));
+});
+
+// ── EXPORT ────────────────────────────────────────────────────────
+// Build the raw EPL2 string with B64 blocks decoded to binary
+function buildRawEPL(){
+  return eplInput.value.replace(/B64:([A-Za-z0-9+/=]+)/g,(_,b64)=>{
+    try{return atob(b64);}catch(e){return '';}
+  });
+}
+
+document.getElementById('btn-download-epl').addEventListener('click',()=>{
+  const raw=buildRawEPL();
+  // Download as binary file using Uint8Array so bytes are preserved exactly
+  const bytes=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i)&0xFF;
+  const blob=new Blob([bytes],{type:'application/octet-stream'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='label.epl';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btn-export-png').onclick=()=>{
+  const a=document.createElement('a');a.download='label.png';a.href=canvas.toDataURL('image/png');a.click();
+};
+document.getElementById('btn-export-print').onclick=()=>{
+  if(!state.parsed) return;
+  const ec=document.createElement('canvas');
+  renderEPL2(state.parsed.cmds,state.parsed.cfg,ec,1,state.dpi);
+  const a=document.createElement('a');a.download='label-print.png';a.href=ec.toDataURL('image/png');a.click();
+};
+
+// ── INIT ──────────────────────────────────────────────────────────
+// Default zoom=1.313 px/dot matches the real Zebra renderer exactly
+// (measured: 1066px wide for 812 dots = 1.313 px/dot).
+// The label is scrollable at this zoom, just like the real renderer.
+setTool('select');
+setZoom(ZEBRA_DEFAULT_ZOOM);
+render();
+
+// ═══════════════════════════════════════════════════════════════════
+// IMAGE → GW CONVERTER
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+  let _srcImage = null;   // HTMLImageElement or ImageBitmap
+  let _gwCmd    = null;   // last generated {x,y,bpr,h,data,w,h_dots}
+  let _placeX   = 50, _placeY = 50;
+
+  // ── SVG → raster ────────────────────────────────────────────────
+  function svgToBitmap(svgText, targetW){
+    return new Promise(resolve=>{
+      // Parse SVG to extract viewBox / intrinsic size
+      const parser=new DOMParser();
+      const doc=parser.parseFromString(svgText,'image/svg+xml');
+      const svgEl=doc.documentElement;
+
+      // Get intrinsic aspect ratio
+      const vb=(svgEl.getAttribute('viewBox')||'').trim().split(/[\s,]+/).map(Number);
+      const vbW=vb.length===4?vb[2]:0, vbH=vb.length===4?vb[3]:0;
+      const intrW=parseFloat(svgEl.getAttribute('width'))||vbW||targetW;
+      const intrH=parseFloat(svgEl.getAttribute('height'))||vbH||targetW;
+      const aspect=intrH/intrW;
+      const w=targetW, h=Math.max(1,Math.round(targetW*aspect));
+
+      // Force explicit width/height on the SVG element so browsers render it correctly
+      svgEl.setAttribute('width', w);
+      svgEl.setAttribute('height', h);
+      // Ensure viewBox exists so content scales
+      if(!svgEl.getAttribute('viewBox') && intrW && intrH){
+        svgEl.setAttribute('viewBox',`0 0 ${intrW} ${intrH}`);
+      }
+      const fixedSvg=new XMLSerializer().serializeToString(doc);
+
+      // Use data URL (more reliable than blob URL for canvas drawImage in all browsers)
+      const dataUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(fixedSvg);
+      const img=new Image();
+      img.onload=()=>{
+        const offscreen=document.createElement('canvas');
+        offscreen.width=w; offscreen.height=h;
+        const ctx2=offscreen.getContext('2d');
+        ctx2.fillStyle='#ffffff';
+        ctx2.fillRect(0,0,w,h);
+        ctx2.drawImage(img,0,0,w,h);
+        resolve({imageData:ctx2.getImageData(0,0,w,h),w,h});
+      };
+      img.onerror=(e)=>{console.error('SVG load error',e);resolve(null);};
+      img.src=dataUrl;
+    });
+  }
+
+  // ── Image → ImageData at target width ───────────────────────────
+  function rasterize(imgEl, targetW){
+    const scale=targetW/imgEl.naturalWidth;
+    const h=Math.round(imgEl.naturalHeight*scale);
+    const offscreen=document.createElement('canvas');
+    offscreen.width=targetW; offscreen.height=h;
+    const ctx2=offscreen.getContext('2d');
+    ctx2.fillStyle='#ffffff';
+    ctx2.fillRect(0,0,targetW,h);
+    ctx2.drawImage(imgEl,0,0,targetW,h);
+    return {imageData:ctx2.getImageData(0,0,targetW,h),w:targetW,h};
+  }
+
+  // ── Floyd-Steinberg dither ───────────────────────────────────────
+  function floydSteinberg(gray, w, h, threshold){
+    const buf=new Float32Array(gray); // copy
+    const out=new Uint8Array(w*h);
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const idx=y*w+x;
+        const old=buf[idx];
+        const nw=old<threshold?0:255;
+        out[idx]=nw;
+        const err=old-nw;
+        if(x+1<w)           buf[idx+1]       +=err*7/16;
+        if(y+1<h){
+          if(x>0)           buf[(y+1)*w+x-1] +=err*3/16;
+                            buf[(y+1)*w+x]   +=err*5/16;
+          if(x+1<w)         buf[(y+1)*w+x+1] +=err*1/16;
+        }
+      }
+    }
+    return out;
+  }
+
+  // ── Convert ImageData → GW binary data string ───────────────────
+  function imageDataToGW(imageData, w, h, threshold, dither, invert){
+    // Convert to grayscale
+    const gray=new Float32Array(w*h);
+    for(let i=0;i<w*h;i++){
+      const r=imageData.data[i*4], g=imageData.data[i*4+1],
+            b=imageData.data[i*4+2], a=imageData.data[i*4+3];
+      // Pre-multiply alpha against white background
+      const fa=a/255;
+      gray[i]=(r*fa+255*(1-fa))*0.299+(g*fa+255*(1-fa))*0.587+(b*fa+255*(1-fa))*0.114;
+    }
+
+    let bits;
+    if(dither==='floyd'){
+      bits=floydSteinberg(gray,w,h,threshold);
+    } else {
+      bits=new Uint8Array(w*h);
+      for(let i=0;i<w*h;i++) bits[i]=gray[i]<threshold?0:255;
+    }
+
+    // EPL GW: 1=black dot, 0=white. Each byte packs 8 pixels MSB first.
+    // Round width up to nearest byte boundary
+    const bpr=Math.ceil(w/8);
+    let gwData='';
+    for(let row=0;row<h;row++){
+      for(let bi=0;bi<bpr;bi++){
+        let byte=0;
+        for(let bit=0;bit<8;bit++){
+          const px=bi*8+bit;
+          if(px<w){
+            // bits[]=255 means white, 0 means black
+            // GW bit=1 means print (black), so invert the sense
+            let isBlack=(bits[row*w+px]===0);
+            if(invert) isBlack=!isBlack;
+            if(isBlack) byte|=(1<<(7-bit));
+          }
+        }
+        gwData+=String.fromCharCode(byte);
+      }
+    }
+    return {bpr, h, data:gwData};
+  }
+
+  // ── Preview canvas ───────────────────────────────────────────────
+  function updatePreview(){
+    if(!_srcImage) return;
+    const targetW=parseInt(document.getElementById('img-width').value)||200;
+    const threshold=parseInt(document.getElementById('img-threshold').value)||128;
+    const dither=document.getElementById('img-dither').value;
+    const invert=document.getElementById('img-invert').value==='yes';
+
+    let raster;
+    if(_srcImage._svgText){
+      svgToBitmap(_srcImage._svgText, targetW).then(r=>{
+        if(!r) return;
+        finishPreview(r.imageData, r.w, r.h, threshold, dither, invert);
+      });
+      return;
+    }
+    raster=rasterize(_srcImage, targetW);
+    finishPreview(raster.imageData, raster.w, raster.h, threshold, dither, invert);
+  }
+
+  function finishPreview(imageData, w, h, threshold, dither, invert){
+    const gw=imageDataToGW(imageData, w, h, threshold, dither, invert);
+    _gwCmd={x:_placeX, y:_placeY, bpr:gw.bpr, h_dots:h, w_dots:w, data:gw.data};
+
+    // Render preview
+    const prev=document.getElementById('img-preview-canvas');
+    const maxW=440;
+    const dispScale=Math.min(1, maxW/w);
+    prev.width=Math.round(w*dispScale);
+    prev.height=Math.round(h*dispScale);
+    const pctx=prev.getContext('2d');
+    const id2=pctx.createImageData(prev.width,prev.height);
+    // Re-render the 1-bit result for preview
+    const bpr=gw.bpr;
+    for(let row=0;row<h;row++){
+      for(let bi=0;bi<bpr;bi++){
+        const byte=gw.data.charCodeAt(row*bpr+bi)||0;
+        for(let bit=0;bit<8;bit++){
+          const px=bi*8+bit;
+          if(px>=w) continue;
+          const isBlack=(byte>>(7-bit))&1;
+          const c=isBlack?0:255;
+          const dx=Math.round(px*dispScale), dy=Math.round(row*dispScale);
+          const dw=Math.max(1,Math.round((px+1)*dispScale)-dx);
+          const dh=Math.max(1,Math.round((row+1)*dispScale)-dy);
+          for(let r=0;r<dh;r++) for(let cc=0;cc<dw;cc++){
+            const ii=((dy+r)*prev.width+(dx+cc))*4;
+            id2.data[ii]=id2.data[ii+1]=id2.data[ii+2]=c; id2.data[ii+3]=255;
+          }
+        }
+      }
+    }
+    pctx.putImageData(id2,0,0);
+    document.getElementById('img-info').textContent=
+      `${w}×${h} dots · ${bpr} bytes/row · GW data: ${gw.bpr*h} bytes`;
+    document.getElementById('img-controls').style.display='block';
+  }
+
+  // ── Build GW EPL line ────────────────────────────────────────────
+  function buildGWLine(cmd){
+    return `GW${cmd.x},${cmd.y},${cmd.bpr},${cmd.h_dots},${cmd.data}`;
+  }
+
+  // ── Load from File / Blob ────────────────────────────────────────
+  function loadFile(file){
+    const reader=new FileReader();
+    if(file.type==='image/svg+xml'||file.name.endsWith('.svg')){
+      reader.onload=e=>{
+        const svgText=e.target.result;
+        // Parse to get natural dimensions
+        const parser=new DOMParser();
+        const svgDoc=parser.parseFromString(svgText,'image/svg+xml');
+        const svgEl=svgDoc.documentElement;
+        const vb=svgEl.getAttribute('viewBox')||'';
+        const vbParts=vb.split(/[\s,]+/);
+        const nw=parseFloat(svgEl.getAttribute('width'))||parseFloat(vbParts[2])||100;
+        const nh=parseFloat(svgEl.getAttribute('height'))||parseFloat(vbParts[3])||100;
+        const fakeImg={naturalWidth:nw,naturalHeight:nh,_svgText:svgText};
+        _srcImage=fakeImg;
+        document.getElementById('img-width').value=Math.min(400,Math.round(nw));
+        updatePreview();
+      };
+      reader.readAsText(file);
+    } else {
+      reader.onload=e=>{
+        const img=new Image();
+        img.onload=()=>{
+          _srcImage=img;
+          document.getElementById('img-width').value=Math.min(400,img.naturalWidth);
+          updatePreview();
+        };
+        img.src=e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  // ── Modal open/close ─────────────────────────────────────────────
+  function openModal(x,y){
+    _placeX=x||50; _placeY=y||50;
+    _srcImage=null; _gwCmd=null;
+    document.getElementById('img-controls').style.display='none';
+    const m=document.getElementById('img-modal');
+    m.style.display='flex';
+  }
+  function closeModal(){
+    document.getElementById('img-modal').style.display='none';
+  }
+
+  // ── Wire events ──────────────────────────────────────────────────
+  document.getElementById('img-modal-close').addEventListener('click',closeModal);
+  document.getElementById('img-modal').addEventListener('click',e=>{
+    if(e.target===e.currentTarget) closeModal();
+  });
+
+  const dropzone=document.getElementById('img-dropzone');
+  const fileInput=document.getElementById('img-file-input');
+
+  dropzone.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',e=>{if(e.target.files[0]) loadFile(e.target.files[0]);});
+
+  dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.style.borderColor='#e94560';});
+  dropzone.addEventListener('dragleave',()=>{dropzone.style.borderColor='#2a4a7a';});
+  dropzone.addEventListener('drop',e=>{
+    e.preventDefault();
+    dropzone.style.borderColor='#2a4a7a';
+    const f=e.dataTransfer.files[0];
+    if(f) loadFile(f);
+  });
+
+  // Paste from clipboard (Ctrl+V anywhere when modal open, or on canvas)
+  document.addEventListener('paste',e=>{
+    const items=e.clipboardData.items;
+    for(const item of items){
+      if(item.type.startsWith('image/')){
+        const f=item.getAsFile();
+        if(f){
+          const m=document.getElementById('img-modal');
+          if(m.style.display!=='flex'){
+            openModal(_placeX,_placeY);
+          }
+          loadFile(f);
+          break;
+        }
+      }
+    }
+  });
+
+  ['img-width','img-threshold'].forEach(id=>{
+    document.getElementById(id).addEventListener('change',updatePreview);
+    document.getElementById(id).addEventListener('input',()=>clearTimeout(window._imgDebounce)||(window._imgDebounce=setTimeout(updatePreview,300)));
+  });
+  ['img-dither','img-invert'].forEach(id=>{
+    document.getElementById(id).addEventListener('change',updatePreview);
+  });
+
+  // Copy GW command
+  document.getElementById('img-copy-gw-btn').addEventListener('click',()=>{
+    if(!_gwCmd) return;
+    const line=buildGWLine(_gwCmd);
+    navigator.clipboard.writeText(line).then(()=>{
+      const btn=document.getElementById('img-copy-gw-btn');
+      const old=btn.textContent;
+      btn.textContent='Copied!';
+      setTimeout(()=>btn.textContent=old,1500);
+    });
+  });
+
+  // Place on label — encode binary as B64: so textarea stays copy-pasteable
+  document.getElementById('img-place-btn').addEventListener('click',()=>{
+    if(!_gwCmd) return;
+    const b64=btoa(_gwCmd.data);
+    const gwLine=`GW${_gwCmd.x},${_gwCmd.y},${_gwCmd.bpr},${_gwCmd.h_dots},B64:${b64}`;
+    const eplInput=document.getElementById('epl-input');
+    eplInput.value=insertLine(eplInput.value,gwLine);
+    render();
+    closeModal();
+    setTool('select');
+  });
+
+  // Expose openModal for tool click handler
+  window.openImageModal=openModal;
+})();
+
+</script>
+
+</body>
+</html>
