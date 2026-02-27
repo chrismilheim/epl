@@ -92,6 +92,19 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
 #canvas-panel { flex: 1; overflow: hidden; position: relative; background: #0d1120; display: flex; flex-direction: column; }
 #canvas-scroll { width: 100%; flex: 1; overflow: auto; padding: 24px; min-height: 0; }
 #canvas-wrap { position: relative; display: inline-block; }
+#label-boundary {
+  display: none;
+  position: absolute; top: 0; left: 0;
+  border: 2px dashed rgba(233,69,96,0.7);
+  pointer-events: none; z-index: 10;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.18);
+}
+#label-boundary::after {
+  content: 'Label edge at ' attr(data-dpi) ' DPI';
+  position: absolute; bottom: -18px; right: 0;
+  font-size: 9px; color: rgba(233,69,96,0.8);
+  white-space: nowrap; font-family: monospace;
+}
 #label-canvas { display: block; }
 #overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
 #overlay.active { pointer-events: all; }
@@ -170,10 +183,17 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
   <div class="tb-group">
     <span class="tb-label">Label Size</span>
     <select id="sel-size">
-      <option value="4x4">4" × 4"</option>
+      <option value="2x1">2" × 1"</option>
+      <option value="3x1">3" × 1"</option>
+      <option value="3x2">3" × 2"</option>
+      <option value="4x1">4" × 1"</option>
+      <option value="4x2">4" × 2"</option>
+      <option value="4x3">4" × 3"</option>
+      <option value="4x4">4" × 4" (square)</option>
       <option value="4x5">4" × 5"</option>
-      <option value="4x6" selected>4" × 6"</option>
-      <option value="6x4">6" × 4"</option>
+      <option value="4x6" selected>4" × 6" (shipping)</option>
+      <option value="6x4">6" × 4" (landscape)</option>
+      <option value="8x4">8" × 4"</option>
     </select>
   </div>
   <div class="tb-group">
@@ -189,7 +209,7 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
     <button class="tb-btn" id="btn-zoom-out">−</button>
     <span id="zoom-display">100%</span>
     <button class="tb-btn" id="btn-zoom-in">+</button>
-    <button class="tb-btn" id="btn-zoom-fit">Fit</button>
+    <button class="tb-btn" id="btn-zoom-fit" title="Zoom to fit label in view (F)">⊡ Fit</button>
   </div>
   <div class="spacer"></div>
   <div class="tb-group">
@@ -278,6 +298,7 @@ P1</textarea>
         <canvas id="label-canvas"></canvas>
         <canvas id="grid-canvas"></canvas>
         <div id="overlay"></div>
+        <div id="label-boundary" title="Physical label edge at selected DPI — content outside this line will be cut off on the printer"></div>
       </div>
     </div>
     <div id="page-nav">
@@ -292,6 +313,7 @@ P1</textarea>
       <span><b>Cursor:</b> <span id="info-cursor">—</span></span>
       <span><b>Label:</b> <span id="info-size">—</span></span>
       <span><b>DPI:</b> <span id="info-dpi">203</span></span>
+      <span id="info-dpi-warn" style="display:none;color:#e9a020;font-weight:600;" title="Label dot count suggests a different DPI than selected">⚠ DPI mismatch</span>
       <span class="snap-indicator" id="snap-info"></span>
       <span id="info-mode"></span>
     </div>
@@ -703,10 +725,11 @@ function setPageSrc(src, pageIdx, pageSrc){
   return joinPages(pages);
 }
 
-function parseEPL2(src){
+function parseEPL2(src, dpi, wIn, hIn){
   const lines=src.split(/\r?\n/);
   const cmds=[];
-  const cfg={width:812,height:609,dpi:203,refX:0,refY:0};
+  dpi = dpi||203;
+  const cfg={width:Math.round((wIn||4)*dpi),height:Math.round((hIn||6)*dpi),dpi:dpi,refX:0,refY:0};
 
   function extractParams(str){
     const res=[]; let i=0;
@@ -777,11 +800,13 @@ function parseEPL2(src){
       continue;
     }
 
+    // q (lowercase) = label width — must check before toUpperCase switch
+    if(raw[0]==='q'){const qw=+raw.slice(1).trim();cmds.push({type:'LABEL_WIDTH',w:qw||cfg.width});continue;}
+
     switch(one){
       case 'N': cmds.push({type:'NEW_LABEL'}); break;
       case 'P': {const p=extractParams(raw.slice(1).trim());cmds.push({type:'PRINT',qty:+p[0]||1});break;}
-      case 'Q': {const p=extractParams(raw.slice(1).trim());cfg.height=+p[0]||cfg.height;cmds.push({type:'LABEL_LENGTH',h:cfg.height});break;}
-      case 'q': {cfg.width=+raw.slice(1).trim()||cfg.width;cmds.push({type:'LABEL_WIDTH',w:cfg.width});break;}
+      case 'Q': {const p=extractParams(raw.slice(1).trim());cmds.push({type:'LABEL_LENGTH',h:+p[0]||cfg.height});break;}
       case 'R': {const p=extractParams(raw.slice(1).trim());cfg.refX=+p[0]||0;cfg.refY=+p[1]||0;cmds.push({type:'REFERENCE',x:cfg.refX,y:cfg.refY});break;}
       case 'S': case 'D': case 'I': case 'f': case 'F': case 'J': break;
       case 'A': {
@@ -806,7 +831,7 @@ function parseEPL2(src){
 // RENDERER
 // ═══════════════════════════════════════════════════════════════════
 function renderEPL2(cmds,cfg,canvas,zoom,dpi){
-  const scale=zoom*(dpi/203);
+  const scale=zoom*(203/dpi);
   const W=Math.round(cfg.width*scale), H=Math.round(cfg.height*scale);
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
@@ -856,7 +881,7 @@ function renderEPL2(cmds,cfg,canvas,zoom,dpi){
 // Barcode width scaling factor — ratio of real Zebra printer module width to nominal.
 // Calibrated: "1Z999AA10123456784" Code128, narrow=2, 233 modules → bare=466 dots,
 // real renderer end=640 (x=50 start) → real width=590 → factor=590/466=1.2661
-const BAR_WIDTH_FACTOR = 1.2661;
+const BAR_WIDTH_FACTOR = 1.0; // Visual width multiplier — 1.0 keeps barcode within bounds
 
 const FONT_CHAR_ADVANCE = {
   1:  9.6875,  // calibrated: Font1 6×8   — "HANDLE WITH CARE" (16 chars, x=50): real end=205
@@ -1180,7 +1205,7 @@ function drawGW(ctx,cmd,scale){
 // GRID RENDERER
 // ═══════════════════════════════════════════════════════════════════
 function renderGrid(gridCanvas,cfg,zoom,dpi,snapSize){
-  const scale=zoom*(dpi/203);
+  const scale=zoom*(203/dpi);
   const W=Math.round(cfg.width*scale), H=Math.round(cfg.height*scale);
   gridCanvas.width=W; gridCanvas.height=H;
   const ctx=gridCanvas.getContext('2d');
@@ -1597,7 +1622,7 @@ function buildPropsPanel(cmd,onUpdate,onDelete,onLayer){
 // APP STATE
 // ═══════════════════════════════════════════════════════════════════
 const state={
-  zoom:1.5, dpi:203,
+  zoom:1.0, dpi:203,
   activeTool:'select',
   snapEnabled:true, snapSize:5, showGrid:false,
   parsed:null,
@@ -1690,17 +1715,25 @@ function render(){
     // Split full source into pages, render only the current page
     const pages=splitPages(eplInput.value);
     const pageCount=pages.length;
-    console.log('render: pageCount=', pageCount, 'currentPage=', state.currentPage, 'src length=', eplInput.value.length);
     state.currentPage=Math.min(state.currentPage, pageCount-1);
     const pageSrc=pages[state.currentPage];
 
-    const result=parseEPL2(pageSrc);
+    // Canvas size driven by DPI + label size selector, not by q/Q in EPL
+    const selSize = LABEL_SIZES_IN[document.getElementById('sel-size').value] || {w:4,h:6};
+    const result=parseEPL2(pageSrc, state.dpi, selSize.w, selSize.h);
     state.parsed=result;
     state.dpi=parseInt(document.getElementById('sel-dpi').value)||203;
     renderEPL2(result.cmds,result.cfg,canvas,state.zoom,state.dpi);
     if(state.showGrid) renderGrid(gridCvs,result.cfg,state.zoom,state.dpi,state.snapSize);
     else {gridCvs.width=canvas.width;gridCvs.height=canvas.height;const g=gridCvs.getContext('2d');g.clearRect(0,0,gridCvs.width,gridCvs.height);}
-    document.getElementById('info-size').textContent=`${result.cfg.width}×${result.cfg.height} dots`;
+    const wIn=(result.cfg.width/result.cfg.dpi).toFixed(2), hIn=(result.cfg.height/result.cfg.dpi).toFixed(2);
+    document.getElementById('info-size').textContent=`${result.cfg.width}×${result.cfg.height} dots (${wIn}"×${hIn}")`
+    // Check if DPI mismatch (label dots imply different DPI than selected)
+    const impliedDpiW = result.cfg.width / 4;  // assuming 4" wide
+    const impliedDpiH = result.cfg.height / 6; // assuming 6" tall
+    const dpiMismatch = Math.abs(impliedDpiW - (state.dpi||203)) > 20 && Math.abs(impliedDpiH - (state.dpi||203)) > 20;
+    const mismatchEl = document.getElementById('info-dpi-warn');
+    if(mismatchEl) mismatchEl.style.display = dpiMismatch ? 'inline' : 'none';
     document.getElementById('info-dpi').textContent=state.dpi;
 
     // Update page nav
@@ -1722,7 +1755,7 @@ function buildOverlay(){
   overlay.className=(state.activeTool!=='select')?'active':'active';
 
   if(!state.parsed) return;
-  const scale=state.zoom*(state.dpi/203);
+  const scale=state.zoom*(203/(state.dpi||203));
   const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT'];
 
   state.parsed.cmds.forEach((cmd,idx)=>{
@@ -1765,7 +1798,7 @@ function onDragStart(e,idx){
   if(cmd.type==='BOX_OUTLINE') hlIdxs.push(cmd.lineIdx+1);
   setHighlightedLines(hlIdxs);
 
-  const scale=state.zoom*(state.dpi/203);
+  const scale=state.zoom*(203/(state.dpi||203));
   const sx=e.clientX, sy=e.clientY;
   const ox=cmd.x||0, oy=cmd.y||0;
   const grid=state.snapEnabled?state.snapSize:0;
@@ -1816,7 +1849,7 @@ function onResizeStart(e,idx,dir){
   e.preventDefault();
   const cmd=state.parsed.cmds[idx];
   if(!cmd) return;
-  const scale=state.zoom*(state.dpi/203);
+  const scale=state.zoom*(203/(state.dpi||203));
   const sx=e.clientX,sy=e.clientY;
   const ow=cmd.w||cmd.h||50, oh=cmd.h||50;
   const grid=state.snapEnabled?state.snapSize:0;
@@ -1874,7 +1907,7 @@ overlay.addEventListener('mousedown',e=>{
   if(state.activeTool==='select') return;
   e.preventDefault();
   const rect=overlay.getBoundingClientRect();
-  const scale=state.zoom*(state.dpi/203);
+  const scale=state.zoom*(203/(state.dpi||203));
   const grid=state.snapEnabled?state.snapSize:0;
   const dotX=snap((e.clientX-rect.left)/scale,grid);
   const dotY=snap((e.clientY-rect.top)/scale,grid);
@@ -1928,7 +1961,7 @@ overlay.addEventListener('mousedown',e=>{
 let ghostEl=null;
 overlay.addEventListener('mousemove',e=>{
   const rect=overlay.getBoundingClientRect();
-  const scale=state.zoom*(state.dpi/203);
+  const scale=state.zoom*(203/(state.dpi||203));
   const grid=state.snapEnabled?state.snapSize:0;
   const dotX=snap((e.clientX-rect.left)/scale,grid);
   const dotY=snap((e.clientY-rect.top)/scale,grid);
@@ -1958,7 +1991,7 @@ overlay.addEventListener('mouseleave',()=>{if(ghostEl){ghostEl.remove();ghostEl=
 canvas.addEventListener('mousemove',e=>{
   if(state.activeTool!=='select') return;
   const rect=canvas.getBoundingClientRect();
-  const scale=state.zoom*(state.dpi/203);
+  const scale=state.zoom*(203/(state.dpi||203));
   const grid=state.snapEnabled?state.snapSize:0;
   const dotX=snap((e.clientX-rect.left)/scale,grid);
   const dotY=snap((e.clientY-rect.top)/scale,grid);
@@ -2022,10 +2055,10 @@ const ZEBRA_DEFAULT_ZOOM = 1.0;
 function zoomToFit(){
   const panel=document.getElementById('canvas-panel');
   if(!state.parsed) return;
-  const s=state.dpi/203;
+  const dpiScale = 203/(state.dpi||203);
   const z=Math.min(
-    (panel.clientWidth  - 40) / (state.parsed.cfg.width  * s),
-    (panel.clientHeight - 40) / (state.parsed.cfg.height * s)
+    (panel.clientWidth  - 40) / (state.parsed.cfg.width  * dpiScale),
+    (panel.clientHeight - 40) / (state.parsed.cfg.height * dpiScale)
   );
   setZoom(Math.max(0.2, z));
 }
@@ -2033,6 +2066,7 @@ function setZoom(z){
   state.zoom=Math.min(5,Math.max(0.2,z));
   zoomDisp.textContent=Math.round(state.zoom*100)+'%';
   render();
+  if(state.parsed) updateLabelBoundary(state.parsed.cfg);
 }
 document.getElementById('btn-zoom-in').onclick=()=>setZoom(state.zoom*1.2);
 document.getElementById('btn-zoom-out').onclick=()=>setZoom(state.zoom/1.2);
@@ -2040,6 +2074,9 @@ document.getElementById('btn-zoom-fit').onclick=zoomToFit;
 
 // ── RENDER TRIGGER ────────────────────────────────────────────────
 document.getElementById('btn-render').onclick=render;
+
+// Auto zoom-to-fit on initial load
+window.addEventListener('load', ()=>{ render(); });
 
 document.getElementById('btn-page-prev').addEventListener('click',()=>{
   if(state.currentPage>0){state.currentPage--;render();}
@@ -2051,7 +2088,6 @@ document.getElementById('btn-page-next').addEventListener('click',()=>{
 document.getElementById('btn-page-add').addEventListener('click',()=>{
   // Duplicate current page's config commands (q, Q, R, ZT) into new page
   const pages=splitPages(eplInput.value);
-  console.log('Before add: pages=', pages.length, 'currentPage=', state.currentPage);
   const curPage=pages[state.currentPage];
   const cfgLines=curPage.split(/\r?\n/).filter(l=>{
     const t=l.trim(); const one=t[0]||'';
@@ -2074,24 +2110,55 @@ document.getElementById('btn-page-del').addEventListener('click',()=>{
 eplInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();render();}});
 let rtimer;
 eplInput.addEventListener('input',()=>{clearTimeout(rtimer);rtimer=setTimeout(render,500);});
-document.getElementById('sel-dpi').addEventListener('change',render);
+document.getElementById('sel-dpi').addEventListener('change', function(){
+  state.dpi = parseInt(this.value) || 203;
+  render();
+});
 
 // ── LABEL SIZE ────────────────────────────────────────────────────
-const LABEL_SIZES = {
-  '4x4': {w:812,  h:812,  gap:25},
-  '4x5': {w:812,  h:1015, gap:25},
-  '4x6': {w:812,  h:1218, gap:25},
-  '6x4': {w:1218, h:812,  gap:25},
+// Label sizes in inches {w, h, gap_inches}
+const LABEL_SIZES_IN = {
+  '2x1': {w:2,   h:1,   gap:0.123},
+  '3x1': {w:3,   h:1,   gap:0.123},
+  '3x2': {w:3,   h:2,   gap:0.123},
+  '4x1': {w:4,   h:1,   gap:0.123},
+  '4x2': {w:4,   h:2,   gap:0.123},
+  '4x3': {w:4,   h:3,   gap:0.123},
+  '4x4': {w:4,   h:4,   gap:0.123},
+  '4x5': {w:4,   h:5,   gap:0.123},
+  '4x6': {w:4,   h:6,   gap:0.123},
+  '6x4': {w:6,   h:4,   gap:0.123},
+  '8x4': {w:8,   h:4,   gap:0.123},
 };
-document.getElementById('sel-size').addEventListener('change', function(){
-  const sz = LABEL_SIZES[this.value];
-  if(!sz) return;
-  // Update q and Q lines in the EPL source
-  let epl = eplInput.value;
-  epl = epl.replace(/^q\d+$/m,  `q${sz.w}`);
-  epl = epl.replace(/^Q\d+,\d+$/m, `Q${sz.h},${sz.gap}`);
-  eplInput.value = epl;
+
+function dotsForInches(inches, dpi){ return Math.round(inches * dpi); }
+
+function applyLabelSize(wIn, hIn, gapIn){
+  const dpi = parseInt(document.getElementById('sel-dpi').value) || 203;
+  const wDots = dotsForInches(wIn, dpi);
+  const hDots = dotsForInches(hIn, dpi);
+  const gapDots = Math.round(gapIn * dpi);
+
+  // Operate on the current page's source only
+  let pageSrc = getPageSrc(eplInput.value, state.currentPage);
+  const hadq  = /^q\d+$/m.test(pageSrc);
+  const hadQ  = /^Q\d+,\d+$/m.test(pageSrc);
+
+  if(hadq) pageSrc = pageSrc.replace(/^q\d+$/m, `q${wDots}`);
+  else     pageSrc = `q${wDots}\n` + pageSrc;
+
+  if(hadQ) pageSrc = pageSrc.replace(/^Q\d+,\d+$/m, `Q${hDots},${gapDots}`);
+  else     pageSrc = pageSrc.replace(/^q\d+$/m, m => m + `\nQ${hDots},${gapDots}`);
+
+  eplInput.value = setPageSrc(eplInput.value, state.currentPage, pageSrc);
   render();
+  zoomToFit();
+}
+
+document.getElementById('sel-size').addEventListener('change', function(){
+  const sz = LABEL_SIZES_IN[this.value];
+  if(!sz) return;
+  applyLabelSize(sz.w, sz.h, sz.gap);
 });
 
 // ── KEYBOARD SHORTCUTS ────────────────────────────────────────────
@@ -2099,6 +2166,7 @@ document.addEventListener('keydown',e=>{
   if(document.activeElement===eplInput||document.activeElement.tagName==='INPUT') return;
 
   // Tool shortcuts
+  if(e.key==='f'){zoomToFit();return;}
   if(e.key==='v'||e.key==='Escape'){setTool('select');return;}
   if(e.key==='t'){setTool('text');return;}
   if(e.key==='h'){setTool('hline');return;}
