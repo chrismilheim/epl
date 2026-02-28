@@ -329,7 +329,7 @@ P1</textarea>
 </div>
 
 <!-- ═══════════════════════ IMAGE IMPORT MODAL ═══════════════════════ -->
-<div id="img-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:none;align-items:center;justify-content:center;">
+<div id="img-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:#131c2e;border:1px solid #2a4a7a;border-radius:8px;padding:24px;width:500px;max-width:95vw;color:#ccd;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <span style="font-size:14px;font-weight:700;color:#e94560;">Import Image → GW Command</span>
@@ -1744,6 +1744,7 @@ function render(){
 
     buildOverlay();
     updateEditorGutter();
+    updateLabelBoundary(result.cfg);
   }catch(e){parseError.textContent=e.message;}
 }
 
@@ -2012,8 +2013,7 @@ overlay.addEventListener('mousedown',e=>{
 function setTool(name){
   state.activeTool=name;
   if(name==='image'){
-    window.openImageModal(50,50);
-    // Don't keep tool active — revert to select after modal opens
+    // Image is handled by button click directly, not via setTool
     state.activeTool='select';
     name='select';
   }
@@ -2024,7 +2024,22 @@ function setTool(name){
   if(ghostEl){ghostEl.remove();ghostEl=null;}
   buildOverlay();
 }
-document.querySelectorAll('.tool-btn').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+document.querySelectorAll('.tool-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    if(b.dataset.tool==='image'){
+      // Open modal directly — don't go through setTool placement flow
+      if(typeof window.openImageModal==='function'){
+        window.openImageModal(50,50);
+      } else {
+        // Fallback: show modal directly
+        const m=document.getElementById('img-modal');
+        if(m) m.style.display='flex';
+      }
+      return;
+    }
+    setTool(b.dataset.tool);
+  });
+});
 
 // ── SNAP CONTROLS ─────────────────────────────────────────────────
 const chkSnap=document.getElementById('chk-snap');
@@ -2066,7 +2081,19 @@ function setZoom(z){
   state.zoom=Math.min(5,Math.max(0.2,z));
   zoomDisp.textContent=Math.round(state.zoom*100)+'%';
   render();
-  if(state.parsed) updateLabelBoundary(state.parsed.cfg);
+}
+
+function updateLabelBoundary(cfg){
+  const boundary=document.getElementById('label-boundary');
+  if(!boundary||!cfg) return;
+  const scale=state.zoom*(203/(state.dpi||203));
+  const dpi=state.dpi||203;
+  const wIn=(cfg.width/dpi).toFixed(2);
+  const hIn=(cfg.height/dpi).toFixed(2);
+  boundary.style.display='block';
+  boundary.style.width=Math.round(cfg.width*scale)+'px';
+  boundary.style.height=Math.round(cfg.height*scale)+'px';
+  boundary.setAttribute('data-dpi',`${dpi} DPI — ${wIn}" × ${hIn}"`);
 }
 document.getElementById('btn-zoom-in').onclick=()=>setZoom(state.zoom*1.2);
 document.getElementById('btn-zoom-out').onclick=()=>setZoom(state.zoom/1.2);
@@ -2482,7 +2509,12 @@ render();
   const dropzone=document.getElementById('img-dropzone');
   const fileInput=document.getElementById('img-file-input');
 
-  dropzone.addEventListener('click',()=>fileInput.click());
+  // Use label trick to reliably open file picker on click
+  const label = document.createElement('label');
+  label.htmlFor = 'img-file-input';
+  label.style.cssText = 'position:absolute;inset:0;cursor:pointer;';
+  dropzone.style.position = 'relative';
+  dropzone.appendChild(label);
   fileInput.addEventListener('change',e=>{if(e.target.files[0]) loadFile(e.target.files[0]);});
 
   dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.style.borderColor='#e94560';});
@@ -2537,8 +2569,8 @@ render();
     if(!_gwCmd) return;
     const b64=btoa(_gwCmd.data);
     const gwLine=`GW${_gwCmd.x},${_gwCmd.y},${_gwCmd.bpr},${_gwCmd.h_dots},B64:${b64}`;
-    const eplInput=document.getElementById('epl-input');
-    eplInput.value=insertLine(eplInput.value,gwLine);
+    const inp=document.getElementById('epl-input');
+    inp.value=setPageSrc(inp.value,state.currentPage,insertLine(getPageSrc(inp.value,state.currentPage),gwLine));
     render();
     closeModal();
     setTool('select');
