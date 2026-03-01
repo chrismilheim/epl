@@ -86,6 +86,25 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
   caret-color: #fff;
 }
 #source-footer { padding: 6px 10px; border-top: 1px solid #1e3a5f; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#lint-panel { flex-shrink:0; max-height:180px; overflow-y:auto; border-top:1px solid #1e3a5f; background:#0a1018; }
+#lint-panel.empty { display:none; }
+.lint-header { display:flex; align-items:center; justify-content:space-between; padding:4px 10px; background:#0d1420; border-bottom:1px solid #1e3a5f; font-size:10px; color:#556; text-transform:uppercase; letter-spacing:0.8px; position:sticky; top:0; z-index:1; }
+.lint-header .lint-counts { display:flex; gap:8px; }
+.lint-count-err  { color:#e94560; font-weight:700; }
+.lint-count-warn { color:#e9a020; font-weight:700; }
+.lint-count-info { color:#4a9eff; font-weight:700; }
+.lint-item { display:flex; align-items:flex-start; gap:8px; padding:4px 10px; border-bottom:1px solid #0d1525; font-size:10px; font-family:'Fira Code','Consolas',monospace; cursor:pointer; transition:background 0.1s; }
+.lint-item:hover { background:#131c2e; }
+.lint-item.err  { border-left:3px solid #e94560; }
+.lint-item.warn { border-left:3px solid #e9a020; }
+.lint-item.info { border-left:3px solid #4a9eff; }
+.lint-badge { font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; flex-shrink:0; margin-top:1px; }
+.lint-badge.err  { background:#3a1520; color:#e94560; }
+.lint-badge.warn { background:#2a1a00; color:#e9a020; }
+.lint-badge.info { background:#0d1f3a; color:#4a9eff; }
+.lint-line-num { color:#2a4a6a; min-width:28px; flex-shrink:0; text-align:right; }
+.lint-msg { color:#8ab; flex:1; line-height:1.4; }
+.lint-msg b { color:#ccd; }
 #parse-error { font-size: 10px; color: #e94560; flex: 1; }
 
 /* ── CANVAS AREA ── */
@@ -158,7 +177,7 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
   display: flex; align-items: center; justify-content: space-between;
 }
 #props-panel .panel-head span { color: #e94560; font-weight: 700; }
-#no-selection { padding: 16px 12px; font-size: 11px; color: #445; text-align: center; }
+#no-selection { padding: 12px 12px; font-size: 11px; color: #445; text-align: left; }
 .prop-section { border-bottom: 1px solid #1e3a5f; padding: 8px 10px; }
 .prop-section-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: #445; margin-bottom: 6px; }
 .prop-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
@@ -173,6 +192,47 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
 .prop-checkbox { accent-color: #e94560; }
 .prop-del { margin-top: 6px; background: #3a1520; border: 1px solid #5a2535; color: #e94560; padding: 4px 10px; border-radius: 3px; font-size: 11px; cursor: pointer; width: 100%; font-weight: 600; }
 .prop-del:hover { background: #5a1525; }
+#rubber-band {
+  position:absolute; border:1px dashed #4a9eff;
+  background:rgba(74,158,255,0.08); pointer-events:none;
+  display:none; z-index:20;
+}
+.dh.multi-sel {
+  outline: 2px solid #4a9eff !important;
+  background: rgba(74,158,255,0.08) !important;
+}
+
+#align-toolbar {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  background:#131c2e; border:1px solid #2a4a7a; border-radius:8px;
+  padding:6px 10px; display:none; align-items:center; gap:4px;
+  z-index:500; box-shadow:0 4px 24px rgba(0,0,0,0.5);
+  user-select:none;
+}
+#align-toolbar.visible { display:flex; }
+#align-toolbar .at-label {
+  font-size:9px; color:#4a6a8a; text-transform:uppercase;
+  letter-spacing:0.8px; margin-right:4px; white-space:nowrap;
+}
+#align-toolbar .at-sep {
+  width:1px; height:22px; background:#1e3a5f; margin:0 4px;
+}
+#align-toolbar .at-btn {
+  background:none; border:1px solid transparent; color:#8ab;
+  width:28px; height:28px; border-radius:4px; cursor:pointer;
+  font-size:14px; display:flex; align-items:center; justify-content:center;
+  transition:all 0.1s; padding:0; line-height:1;
+}
+#align-toolbar .at-btn:hover { background:#1a3050; border-color:#3a5a8a; color:#dde; }
+#align-toolbar .at-btn:active { background:#e94560; border-color:#e94560; color:#fff; }
+#align-toolbar .at-mode {
+  font-size:9px; color:#4a6a8a; cursor:pointer; padding:3px 6px;
+  border:1px solid #1e3a5f; border-radius:3px; background:none;
+  transition:all 0.1s; white-space:nowrap;
+}
+#align-toolbar .at-mode.active { background:#1a3050; border-color:#3a5a8a; color:#8ab; }
+#align-toolbar .at-count { font-size:10px; color:#4a6a8a; margin-right:2px; }
+
 </style>
 </head>
 <body>
@@ -203,6 +263,10 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
       <option value="300">300</option>
       <option value="600">600</option>
     </select>
+  </div>
+  <div class="tb-group">
+    <button class="tb-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>↩ Undo</button>
+    <button class="tb-btn" id="btn-redo" title="Redo (Ctrl+Y / Ctrl+Shift+Z)" disabled>↪ Redo</button>
   </div>
   <div class="tb-group">
     <span class="tb-label">Zoom</span>
@@ -284,6 +348,17 @@ A30,615,0,1,1,1,N,"ORDER BARCODE:"
 B30,630,0,1,2,4,60,B,"78234B00420001"
 P1</textarea>
     </div><!-- /epl-editor-wrap -->
+    <div id="lint-panel" class="empty">
+      <div class="lint-header">
+        <span>⚑ EPL2 Linter</span>
+        <span class="lint-counts">
+          <span class="lint-count-err"  id="lint-err-count"></span>
+          <span class="lint-count-warn" id="lint-warn-count"></span>
+          <span class="lint-count-info" id="lint-info-count"></span>
+        </span>
+      </div>
+      <div id="lint-items"></div>
+    </div>
     <div id="source-footer">
       <span id="parse-error"></span>
       <button class="tb-btn" id="btn-render">Render ▶</button>
@@ -298,6 +373,7 @@ P1</textarea>
         <canvas id="label-canvas"></canvas>
         <canvas id="grid-canvas"></canvas>
         <div id="overlay"></div>
+        <div id="rubber-band"></div>
         <div id="label-boundary" title="Physical label edge at selected DPI — content outside this line will be cut off on the printer"></div>
       </div>
     </div>
@@ -322,7 +398,28 @@ P1</textarea>
   <!-- PROPERTIES PANEL -->
   <div id="props-panel">
     <div class="panel-head">Properties <span id="props-type-label"></span></div>
-    <div id="no-selection">Select or add an element to edit its properties.</div>
+    <div id="no-selection">
+      <div style="color:#4a7a8a;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Keyboard Shortcuts</div>
+      <table style="width:100%;border-collapse:collapse;font-size:10px;color:#556;">
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">V / Esc</td><td style="padding:2px 0;">Select tool</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">T</td><td style="padding:2px 0;">Text tool</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">H / L</td><td style="padding:2px 0;">H-bar / V-bar</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">B / O</td><td style="padding:2px 0;">Filled box / Outline box</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">C / M</td><td style="padding:2px 0;">Barcode / Data matrix</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">F</td><td style="padding:2px 0;">Zoom to fit</td></tr>
+        <tr><td colspan="2" style="padding:4px 0 2px;color:#2a4a5a;border-top:1px solid #1a2a3a;"></td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Click</td><td style="padding:2px 0;">Select element</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Shift+Click</td><td style="padding:2px 0;">Add to selection</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Drag canvas</td><td style="padding:2px 0;">Rubber-band select</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Drag element</td><td style="padding:2px 0;">Move (multi: moves all)</td></tr>
+        <tr><td colspan="2" style="padding:4px 0 2px;color:#2a4a5a;border-top:1px solid #1a2a3a;"></td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Delete</td><td style="padding:2px 0;">Delete selected</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Ctrl+Delete</td><td style="padding:2px 0;">Delete all selected</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Ctrl+Z / Ctrl+Y</td><td style="padding:2px 0;">Undo / Redo</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Arrow keys</td><td style="padding:2px 0;">Nudge (Shift = snap size)</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Ctrl+Enter</td><td style="padding:2px 0;">Re-render EPL source</td></tr>
+      </table>
+    </div>
     <div id="props-content" style="display:none"></div>
   </div>
 
@@ -379,6 +476,29 @@ P1</textarea>
     </div>
   </div>
 </div>
+
+<!-- ALIGN TOOLBAR -->
+<div id="align-toolbar">
+  <span class="at-count" id="at-count"></span>
+  <span class="at-label">Align to</span>
+  <button class="at-mode active" id="at-mode-sel" title="Align relative to selection bounding box">Selection</button>
+  <button class="at-mode" id="at-mode-label" title="Align relative to label edges">Label</button>
+  <div class="at-sep"></div>
+  <span class="at-label">H</span>
+  <button class="at-btn" id="at-align-left"   title="Align left edges">⇤</button>
+  <button class="at-btn" id="at-align-hcenter" title="Center horizontally">↔</button>
+  <button class="at-btn" id="at-align-right"  title="Align right edges">⇥</button>
+  <div class="at-sep"></div>
+  <span class="at-label">V</span>
+  <button class="at-btn" id="at-align-top"    title="Align top edges">⇡</button>
+  <button class="at-btn" id="at-align-vcenter" title="Center vertically">↕</button>
+  <button class="at-btn" id="at-align-bottom" title="Align bottom edges">⇣</button>
+  <div class="at-sep"></div>
+  <span class="at-label">Dist</span>
+  <button class="at-btn" id="at-dist-h" title="Distribute horizontally">⣿</button>
+  <button class="at-btn" id="at-dist-v" title="Distribute vertically" style="transform:rotate(90deg)">⣿</button>
+</div>
+
 
 <script>
 'use strict';
@@ -1627,8 +1747,53 @@ const state={
   snapEnabled:true, snapSize:5, showGrid:false,
   parsed:null,
   selectedIdx:null,
+  selectedIdxs:new Set(), // multi-select
   currentPage:0,
 };
+
+// ── UNDO / REDO ────────────────────────────────────────────────────
+const HISTORY_MAX = 100;
+const history = { stack:[], idx:-1, locked:false };
+
+function historySave(){
+  if(history.locked) return;
+  const snap = eplInput.value;
+  // Don't save if identical to current
+  if(history.idx>=0 && history.stack[history.idx]===snap) return;
+  // Truncate redo branch
+  history.stack.splice(history.idx+1);
+  history.stack.push(snap);
+  if(history.stack.length>HISTORY_MAX) history.stack.shift();
+  history.idx = history.stack.length-1;
+  historyUpdateButtons();
+}
+
+function historyUndo(){
+  if(history.idx<=0) return;
+  history.locked=true;
+  history.idx--;
+  eplInput.value = history.stack[history.idx];
+  render();
+  history.locked=false;
+  historyUpdateButtons();
+}
+
+function historyRedo(){
+  if(history.idx>=history.stack.length-1) return;
+  history.locked=true;
+  history.idx++;
+  eplInput.value = history.stack[history.idx];
+  render();
+  history.locked=false;
+  historyUpdateButtons();
+}
+
+function historyUpdateButtons(){
+  const u=document.getElementById('btn-undo');
+  const r=document.getElementById('btn-redo');
+  if(u) u.disabled = history.idx<=0;
+  if(r) r.disabled = history.idx>=history.stack.length-1;
+}
 
 const canvas    = document.getElementById('label-canvas');
 const gridCvs   = document.getElementById('grid-canvas');
@@ -1745,6 +1910,8 @@ function render(){
     buildOverlay();
     updateEditorGutter();
     updateLabelBoundary(result.cfg);
+    runLinter();
+    if(typeof window._alignRenderHook==="function") window._alignRenderHook();
   }catch(e){parseError.textContent=e.message;}
 }
 
@@ -1764,7 +1931,9 @@ function buildOverlay(){
     const bb=getBB(cmd,scale);
     if(!bb) return;
     const el=document.createElement('div');
-    el.className='dh'+(state.selectedIdx===idx?' sel':'');
+    const isMainSel=state.selectedIdx===idx;
+    const isMultiSel=state.selectedIdxs.has(idx);
+    el.className='dh'+(isMainSel?' sel':isMultiSel?' multi-sel':'');
     el.style.cssText=`left:${bb.x}px;top:${bb.y}px;width:${bb.w}px;height:${bb.h}px`;
     el.dataset.idx=idx;
     el.addEventListener('mousedown',e=>onDragStart(e,idx));
@@ -1788,53 +1957,49 @@ function makeResizeHandle(className,idx,dir){
 }
 
 // ── DRAG ─────────────────────────────────────────────────────────
-function onDragStart(e,idx){
-  e.preventDefault();e.stopPropagation();
-  state.selectedIdx=idx;
-  const cmd=state.parsed.cmds[idx];
-  if(!cmd) return;
+function showMultiSelectProps(){
+  const cnt=state.selectedIdxs.size;
+  const _pc=document.getElementById('props-content');
+  const _ns=document.getElementById('no-selection');
+  const _pl=document.getElementById('props-type-label');
+  if(_pc&&_ns&&_pl){
+    _pl.textContent=cnt+' elements';
+    _pc.style.display='block'; _ns.style.display='none';
+    _pc.innerHTML='<div style="color:#8ab;font-size:12px;padding:6px 0;"><b>'+cnt+' elements selected</b><br>'
+      +'<span style="color:#567;font-size:10px;line-height:1.8;">Drag any to move all · Shift+click to adjust<br>Ctrl+Delete to remove all</span></div>';
+  }
+}
 
-  // Highlight the selected element's line(s) in the source editor
-  const hlIdxs=[cmd.lineIdx];
-  if(cmd.type==='BOX_OUTLINE') hlIdxs.push(cmd.lineIdx+1);
-  setHighlightedLines(hlIdxs);
-
+function startDrag(e, primaryIdx){
+  const primaryCmd=state.parsed.cmds[primaryIdx];
+  if(!primaryCmd) return;
   const scale=state.zoom*(203/(state.dpi||203));
   const sx=e.clientX, sy=e.clientY;
-  const ox=cmd.x||0, oy=cmd.y||0;
   const grid=state.snapEnabled?state.snapSize:0;
 
-  buildOverlay();
-  buildPropsPanel(cmd,onPropUpdate,()=>onDelete(idx),(dir)=>{
-    eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,dir));
-    render();
-    // After reorder, re-select by matching x,y,type
-    if(state.parsed){
-      const newIdx=state.parsed.cmds.findIndex(c=>c.type===cmd.type&&c.x===cmd.x&&c.y===cmd.y);
-      if(newIdx>=0){
-        state.selectedIdx=newIdx;
-        buildOverlay();
-        buildPropsPanel(state.parsed.cmds[newIdx],onPropUpdate,()=>onDelete(newIdx),(dir2)=>{
-          eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),state.parsed.cmds[newIdx].lineIdx,dir2));
-          render();
-        });
-      }
-    }
-  });
+  // Snapshot origins of all selected elements at drag start
+  const dragTargets=[...state.selectedIdxs].map(i=>{
+    const c=state.parsed.cmds[i];
+    return c?{cmd:c, ox:c.x||0, oy:c.y||0}:null;
+  }).filter(Boolean);
+  if(dragTargets.length===0) dragTargets.push({cmd:primaryCmd, ox:primaryCmd.x||0, oy:primaryCmd.y||0});
 
-  const el=overlay.querySelector(`[data-idx="${idx}"]`);
-  if(el) el.classList.add('dragging');
-
+  let moved=false;
   function move(ev){
     const dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
-    const nx=Math.max(0,snap(ox+dx,grid));
-    const ny=Math.max(0,snap(oy+dy,grid));
-    cmd.x=nx; cmd.y=ny;
-    eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
+    if(!moved&&(Math.abs(dx)>2||Math.abs(dy)>2)){ historySave(); moved=true; }
+    dragTargets.forEach(({cmd:c,ox,oy})=>{
+      c.x=Math.max(0,snap(ox+dx,grid));
+      c.y=Math.max(0,snap(oy+dy,grid));
+    });
+    let pageSrc=getPageSrc(eplInput.value,state.currentPage);
+    [...dragTargets].sort((a,b)=>b.cmd.lineIdx-a.cmd.lineIdx).forEach(({cmd:c})=>{
+      pageSrc=updateLine(pageSrc,c.lineIdx,cmdToEPLLine(c));
+    });
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,pageSrc);
     render();
-    // update props x/y inputs live
     const px=document.getElementById('prop-x'),py=document.getElementById('prop-y');
-    if(px) px.value=nx; if(py) py.value=ny;
+    if(px) px.value=primaryCmd.x; if(py) py.value=primaryCmd.y;
   }
   function up(){
     document.removeEventListener('mousemove',move);
@@ -1843,6 +2008,68 @@ function onDragStart(e,idx){
   }
   document.addEventListener('mousemove',move);
   document.addEventListener('mouseup',up);
+}
+
+function onDragStart(e,idx){
+  e.preventDefault();e.stopPropagation();
+  const cmd=state.parsed.cmds[idx];
+  if(!cmd) return;
+
+  if(e.shiftKey){
+    // Toggle in multi-selection
+    if(state.selectedIdxs.has(idx)){
+      state.selectedIdxs.delete(idx);
+      state.selectedIdx=state.selectedIdxs.size>0?[...state.selectedIdxs][state.selectedIdxs.size-1]:null;
+    } else {
+      if(state.selectedIdx!==null) state.selectedIdxs.add(state.selectedIdx);
+      state.selectedIdxs.add(idx);
+      state.selectedIdx=idx;
+    }
+    buildOverlay();
+    if(state.selectedIdxs.size===1){
+      const si=[...state.selectedIdxs][0];
+      const sc=state.parsed.cmds[si];
+      if(sc) buildPropsPanel(sc,onPropUpdate,()=>onDelete(si),(dir)=>doMoveLayer(si,dir));
+    } else if(state.selectedIdxs.size>1){
+      showMultiSelectProps();
+    } else {
+      buildPropsPanel(null,null,null,null);
+    }
+    startDrag(e,idx);
+    return;
+  }
+
+  // Normal click
+  if(!state.selectedIdxs.has(idx)){
+    // Clicking unselected element — clear and select just this
+    state.selectedIdxs.clear();
+    state.selectedIdx=idx;
+    state.selectedIdxs.add(idx);
+    const hlIdxs=[cmd.lineIdx];
+    if(cmd.type==='BOX_OUTLINE') hlIdxs.push(cmd.lineIdx+1);
+    setHighlightedLines(hlIdxs);
+    buildOverlay();
+    buildPropsPanel(cmd,onPropUpdate,()=>onDelete(idx),(dir)=>doMoveLayer(idx,dir));
+  }
+  // If clicking already-selected item in multi-select, keep group and just drag
+
+  startDrag(e,idx);
+}
+
+function doMoveLayer(idx,dir){
+  const cmd=state.parsed.cmds[idx];
+  if(!cmd) return;
+  historySave();
+  eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,dir));
+  render();
+  if(state.parsed){
+    const newIdx=state.parsed.cmds.findIndex(c=>c.type===cmd.type&&c.x===cmd.x&&c.y===cmd.y);
+    if(newIdx>=0){
+      state.selectedIdx=newIdx;
+      buildOverlay();
+      buildPropsPanel(state.parsed.cmds[newIdx],onPropUpdate,()=>onDelete(newIdx),(dir2)=>doMoveLayer(newIdx,dir2));
+    }
+  }
 }
 
 // ── RESIZE ───────────────────────────────────────────────────────
@@ -1862,9 +2089,11 @@ function onResizeStart(e,idx,dir){
     // For LINE_HORIZ resize width in 'w', thickness in h via t
     if(cmd.type==='LINE_HORIZ'&&dir==='r') cmd.w=Math.max(1,snap(ow+dx,grid));
     if(cmd.type==='LINE_VERT'&&dir==='b') cmd.h=Math.max(1,snap(oh+dy,grid));
+    historySave();
     eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
     render();
     buildPropsPanel(cmd,onPropUpdate,()=>onDelete(idx),(dir)=>{
+    historySave();
     eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,dir));
     render();
     // After reorder, re-select by matching x,y,type
@@ -1874,6 +2103,7 @@ function onResizeStart(e,idx,dir){
         state.selectedIdx=newIdx;
         buildOverlay();
         buildPropsPanel(state.parsed.cmds[newIdx],onPropUpdate,()=>onDelete(newIdx),(dir2)=>{
+          historySave();
           eplInput.value=setPageSrc(eplInput.value,state.currentPage,moveLayer(getPageSrc(eplInput.value,state.currentPage),state.parsed.cmds[newIdx].lineIdx,dir2));
           render();
         });
@@ -1888,6 +2118,7 @@ function onResizeStart(e,idx,dir){
 
 // ── PROP UPDATE ───────────────────────────────────────────────────
 function onPropUpdate(cmd){
+  historySave();
   eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
   render();
 }
@@ -1897,6 +2128,7 @@ function onDelete(idx){
   if(!state.parsed) return;
   const cmd=state.parsed.cmds[idx];
   if(!cmd||cmd.lineIdx===undefined) return;
+  historySave();
   eplInput.value=setPageSrc(eplInput.value,state.currentPage,deleteLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx));
   state.selectedIdx=null;
   buildPropsPanel(null,null,null);
@@ -1940,6 +2172,7 @@ overlay.addEventListener('mousedown',e=>{
   newLine=cmdToEPLLine(newCmd);
 
   // Insert into source, find new lineIdx by parsing
+  historySave();
   eplInput.value=setPageSrc(eplInput.value,state.currentPage,insertLine(getPageSrc(eplInput.value,state.currentPage),newLine));
   render();
 
@@ -2002,11 +2235,67 @@ canvas.addEventListener('mousemove',e=>{
 // Click on canvas bg in select mode = deselect
 overlay.addEventListener('mousedown',e=>{
   if(state.activeTool!=='select') return;
-  if(e.target===overlay){
+  if(e.target!==overlay) return;
+  e.preventDefault();
+
+  // Start rubber-band selection
+  if(!e.shiftKey){
     state.selectedIdx=null;
+    state.selectedIdxs.clear();
     buildPropsPanel(null,null,null);
     buildOverlay();
   }
+
+  const scale=state.zoom*(203/(state.dpi||203));
+  const rect=overlay.getBoundingClientRect();
+  const startX=e.clientX-rect.left, startY=e.clientY-rect.top;
+  const rb=document.getElementById('rubber-band');
+  if(!rb) return;
+  rb.style.cssText=`display:block;left:${startX}px;top:${startY}px;width:0;height:0;`;
+
+  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT'];
+
+  function rbMove(ev){
+    const cx=ev.clientX-rect.left, cy=ev.clientY-rect.top;
+    const x=Math.min(startX,cx), y=Math.min(startY,cy);
+    const w=Math.abs(cx-startX), h=Math.abs(cy-startY);
+    rb.style.left=x+'px'; rb.style.top=y+'px';
+    rb.style.width=w+'px'; rb.style.height=h+'px';
+    if(!state.parsed||w<4||h<4) return;
+    state.selectedIdxs.clear();
+    state.parsed.cmds.forEach((cmd,idx)=>{
+      if(!draggable.includes(cmd.type)) return;
+      const bb=getBB(cmd,scale);
+      if(!bb) return;
+      if(bb.x+bb.w>x && bb.x<x+w && bb.y+bb.h>y && bb.y<y+h) state.selectedIdxs.add(idx);
+    });
+    state.selectedIdx=state.selectedIdxs.size>0?[...state.selectedIdxs][state.selectedIdxs.size-1]:null;
+    buildOverlay();
+  }
+
+  function rbUp(){
+    rb.style.display='none';
+    document.removeEventListener('mousemove',rbMove);
+    document.removeEventListener('mouseup',rbUp);
+    const count=state.selectedIdxs.size;
+    if(count===1){
+      const idx=[...state.selectedIdxs][0];
+      const cmd=state.parsed&&state.parsed.cmds[idx];
+      if(cmd) buildPropsPanel(cmd,onPropUpdate,()=>onDelete(idx),(dir)=>doMoveLayer(idx,dir));
+    } else if(count>1){
+      const _pc=document.getElementById('props-content');
+      const _ns=document.getElementById('no-selection');
+      const _pl=document.getElementById('props-type-label');
+      if(_pc&&_ns&&_pl){
+        _pl.textContent=count+' elements';
+        _pc.style.display='block'; _ns.style.display='none';
+        _pc.innerHTML='<div style="color:#8ab;font-size:12px;padding:6px 0;"><b>'+count+' elements selected</b><br><span style="color:#567;font-size:10px;line-height:1.8;">Drag any to move all · Shift+click to adjust · Delete to remove all</span></div>';
+      }
+    }
+  }
+
+  document.addEventListener('mousemove',rbMove);
+  document.addEventListener('mouseup',rbUp);
 });
 
 // ── TOOL SWITCHER ─────────────────────────────────────────────────
@@ -2095,15 +2384,316 @@ function updateLabelBoundary(cfg){
   boundary.style.height=Math.round(cfg.height*scale)+'px';
   boundary.setAttribute('data-dpi',`${dpi} DPI — ${wIn}" × ${hIn}"`);
 }
+document.getElementById('btn-undo').addEventListener('click', historyUndo);
+document.getElementById('btn-redo').addEventListener('click', historyRedo);
 document.getElementById('btn-zoom-in').onclick=()=>setZoom(state.zoom*1.2);
 document.getElementById('btn-zoom-out').onclick=()=>setZoom(state.zoom/1.2);
 document.getElementById('btn-zoom-fit').onclick=zoomToFit;
+
+
+// ═══════════════════════════════════════════════════════════════════
+// EPL2 LINTER
+// ═══════════════════════════════════════════════════════════════════
+function lintEPL2(src, dpi){
+  dpi = dpi||203;
+  const issues=[];
+  const pageSrc = getPageSrc(src, state.currentPage||0);
+  const lines = pageSrc.split(/\r?\n/);
+
+  // Page offset for line numbers (so line numbers match textarea)
+  const pages = splitPages(src);
+  let pageOffset = 0;
+  for(let i=0;i<(state.currentPage||0);i++) pageOffset+=pages[i].split(/\r?\n/).length;
+
+  function add(type, lineIdx, msg){
+    issues.push({type, lineIdx: lineIdx+pageOffset, msg});
+  }
+
+  // Helpers
+  function extractParams(str){
+    const res=[];let i=0;
+    while(i<str.length){
+      if(str[i]==='"'){const end=str.indexOf('"',i+1);if(end===-1){res.push(str.slice(i+1));break;}res.push(str.slice(i+1,end));i=end+2;}
+      else{const nc=str.indexOf(',',i);if(nc===-1){res.push(str.slice(i).trim());break;}res.push(str.slice(i,nc).trim());i=nc+1;}
+    }
+    return res;
+  }
+
+  let hasN=false, hasQ=false, hasq=false, hasP=false, hasR=false;
+  const selSize = LABEL_SIZES_IN[document.getElementById('sel-size').value]||{w:4,h:6};
+  const labelW = Math.round(selSize.w*dpi);
+  const labelH = Math.round(selSize.h*dpi);
+
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(!raw||raw.startsWith(';')) continue;
+    const one=raw[0];
+    const oneU=one.toUpperCase();
+    const two=raw.substring(0,2).toUpperCase();
+
+    // ── Structure checks ──────────────────────────────────────────
+    if(raw==='N') hasN=true;
+    if(oneU==='P') hasP=true;
+    if(oneU==='Q') hasQ=true;
+    if(one==='q') hasq=true;
+    if(oneU==='R') hasR=true;
+
+    // ── Text (A command) ──────────────────────────────────────────
+    if(oneU==='A' && one==='A'){
+      const p=extractParams(raw.slice(1).trim());
+      if(p.length<8){
+        add('err',li,`<b>A command</b> needs 8 params, got ${p.length}`);
+        continue;
+      }
+      const x=+p[0],y=+p[1],rot=+p[2],fn=+p[3],hm=+p[4],vm=+p[5];
+      if(x<0) add('err',li,`<b>Text</b> x=${x} is negative`);
+      if(y<0) add('err',li,`<b>Text</b> y=${y} is negative`);
+      if(x>=labelW) add('warn',li,`<b>Text</b> x=${x} is beyond label width (${labelW} dots)`);
+      if(y>=labelH) add('warn',li,`<b>Text</b> y=${y} is beyond label height (${labelH} dots)`);
+      if(![0,1,2,3].includes(rot)) add('err',li,`<b>Text</b> rotation=${rot} invalid (use 0/1/2/3)`);
+      if(![1,2,3,4,5].includes(fn)) add('warn',li,`<b>Text</b> font=${fn} unknown (use 1-5)`);
+      if(hm<1||hm>8) add('warn',li,`<b>Text</b> hMult=${hm} unusual (1-8 typical)`);
+      if(vm<1||vm>8) add('warn',li,`<b>Text</b> vMult=${vm} unusual (1-8 typical)`);
+      if(p[6]!=='N'&&p[6]!=='R') add('err',li,`<b>Text</b> reverse field must be N or R, got "${p[6]}"`);
+      if(!p[7]&&p[7]!=='') add('warn',li,`<b>Text</b> data field missing`);
+      if(x+p[7].length*6*hm>labelW) add('info',li,`<b>Text</b> may extend past right edge of label`);
+    }
+
+    // ── Barcode (B command) ───────────────────────────────────────
+    if(oneU==='B' && one==='B'){
+      const p=extractParams(raw.slice(1).trim());
+      if(p.length<9){
+        add('err',li,`<b>Barcode</b> needs 9 params, got ${p.length}`);
+        continue;
+      }
+      const x=+p[0],y=+p[1],rot=+p[2],narrow=+p[4],wide=+p[5],h=+p[6];
+      if(x<0) add('err',li,`<b>Barcode</b> x=${x} is negative`);
+      if(y<0) add('err',li,`<b>Barcode</b> y=${y} is negative`);
+      if(x>=labelW) add('warn',li,`<b>Barcode</b> x=${x} exceeds label width`);
+      if(y>=labelH) add('warn',li,`<b>Barcode</b> y=${y} exceeds label height`);
+      if(y+h>labelH) add('warn',li,`<b>Barcode</b> height extends ${y+h-labelH} dots below label`);
+      if(![0,1,2,3].includes(rot)) add('err',li,`<b>Barcode</b> rotation=${rot} invalid`);
+      if(narrow<1) add('err',li,`<b>Barcode</b> narrow=${narrow} must be ≥1`);
+      if(wide<narrow) add('err',li,`<b>Barcode</b> wide=${wide} must be ≥ narrow (${narrow})`);
+      if(wide/narrow>3.5) add('warn',li,`<b>Barcode</b> wide/narrow ratio ${(wide/narrow).toFixed(1)} is high — may not scan`);
+      if(h<20) add('warn',li,`<b>Barcode</b> height=${h} is very short — scanners may struggle`);
+      if(p[7]!=='B'&&p[7]!=='N') add('err',li,`<b>Barcode</b> HRI field must be B or N, got "${p[7]}"`);
+      if(!p[8]) add('warn',li,`<b>Barcode</b> data is empty`);
+    }
+
+    // ── Lines (LO, LE, LS, LV) ───────────────────────────────────
+    if(two==='LO'||two==='LE'||two==='LS'||two==='LV'){
+      const p=extractParams(raw.slice(2).trim());
+      if(p.length<4){add('err',li,`<b>${two}</b> needs 4 params, got ${p.length}`);continue;}
+      const x=+p[0],y=+p[1],w=+p[2],h=+p[3];
+      if(x<0) add('err',li,`<b>${two}</b> x=${x} is negative`);
+      if(y<0) add('err',li,`<b>${two}</b> y=${y} is negative`);
+      if(w<=0) add('err',li,`<b>${two}</b> width/length=${w} must be >0`);
+      if(h<=0) add('err',li,`<b>${two}</b> height/thickness=${h} must be >0`);
+      if(x+w>labelW) add('warn',li,`<b>${two}</b> extends ${x+w-labelW} dots past right edge`);
+      if(y+h>labelH) add('warn',li,`<b>${two}</b> extends ${y+h-labelH} dots below bottom`);
+    }
+
+    // ── Label width/height ────────────────────────────────────────
+    if(one==='q'){
+      const w=+raw.slice(1).trim();
+      if(w<=0) add('err',li,`<b>q</b> label width=${w} must be >0`);
+      if(w>4000) add('warn',li,`<b>q</b> width=${w} dots seems very large`);
+      if(w!==labelW) add('info',li,`<b>q${w}</b> differs from label size selector (${labelW} dots at ${dpi} DPI) — canvas uses selector`);
+    }
+    if(oneU==='Q' && one==='Q'){
+      const p=extractParams(raw.slice(1).trim());
+      const h=+p[0], gap=+p[1];
+      if(h<=0) add('err',li,`<b>Q</b> label height=${h} must be >0`);
+      if(gap<0) add('err',li,`<b>Q</b> gap=${gap} must be ≥0`);
+      if(h!==labelH) add('info',li,`<b>Q${h}</b> differs from label size selector (${labelH} dots) — canvas uses selector`);
+    }
+
+    // ── Print command ─────────────────────────────────────────────
+    if(oneU==='P'){
+      const qty=+raw.slice(1).trim();
+      if(qty<1) add('err',li,`<b>P</b> print quantity=${qty} must be ≥1`);
+      if(qty>9999) add('warn',li,`<b>P</b> quantity=${qty} is very high`);
+      // Check nothing meaningful comes after P
+      const remaining=lines.slice(li+1).map(l=>l.trim()).filter(l=>l&&!l.startsWith(';'));
+      if(remaining.length>0){
+        add('err',li,`<b>P${qty}</b> is not the last command — ${remaining.length} line(s) follow (e.g. <b>${remaining[0].slice(0,20)}</b>). Commands after P are ignored by the printer.`);
+      }
+    }
+
+    // ── X command (box with rounded corners) ─────────────────────
+    if(one==='X'){
+      add('warn',li,`<b>X (rounded box)</b> — unreliable on many Zebra printers. Results vary significantly by printer model and firmware. Consider using <b>LO</b> (filled box) or <b>LO+LE</b> (outline box) instead for consistent output.`);
+    }
+
+    // ── Unknown commands ──────────────────────────────────────────
+    const known=['N','P','Q','R','S','D','I','F','J','f','A','B','b','X'];
+    const knownTwo=['LO','LE','LS','LV','LD','GW','ZT','ZB'];
+    const isKnownTwo = knownTwo.includes(two);
+    const isKnownOne = known.includes(one);
+    if(!isKnownTwo && !isKnownOne && one!=='q'){
+      add('warn',li,`Unknown command <b>${raw.slice(0,8)}</b>`);
+    }
+  }
+
+  // ── Barcode data validation ───────────────────────────────────────
+  // Re-scan for barcode-specific data checks
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(!raw||raw.startsWith(';')) continue;
+    if(raw[0]==='B'){
+      const p=extractParams(raw.slice(1).trim());
+      if(p.length<9) continue;
+      const btype=p[3], data=p[8]||'';
+
+      // UPC-A: exactly 11 digits (printer adds check digit) or 12
+      if(btype==='A'){
+        if(!/^\d{11,12}$/.test(data))
+          add('err',li,`<b>UPC-A</b> data must be 11-12 digits, got "${data.slice(0,20)}"`);
+      }
+      // EAN-13: exactly 12 or 13 digits
+      if(btype==='E'){
+        if(!/^\d{12,13}$/.test(data))
+          add('err',li,`<b>EAN-13</b> data must be 12-13 digits, got "${data.slice(0,20)}"`);
+      }
+      // Code 39: only valid chars
+      if(btype==='3'){
+        const invalid=data.replace(/[A-Z0-9 \-\.\/\+\%\$\*]/g,'');
+        if(invalid) add('err',li,`<b>Code 39</b> contains invalid characters: "${invalid}"`);
+        if(data.length>43) add('warn',li,`<b>Code 39</b> data length ${data.length} is long — barcode may be too wide to scan reliably`);
+      }
+      // Code 128: non-printable ASCII warning
+      if(btype==='1'){
+        for(let ci=0;ci<data.length;ci++){
+          if(data.charCodeAt(ci)<32||data.charCodeAt(ci)>126){
+            add('warn',li,`<b>Code 128</b> contains non-printable character at position ${ci} (code ${data.charCodeAt(ci)})`);
+            break;
+          }
+        }
+      }
+      // Empty data
+      if(!data) add('err',li,`<b>Barcode</b> (type ${btype}) has empty data — will not print`);
+
+      // Barcode too narrow to be scannable
+      const narrow=+p[4];
+      if(dpi===203 && narrow<2) add('warn',li,`<b>Barcode</b> narrow=${narrow} at 203 DPI may be too thin to scan reliably — use ≥2`);
+      if(dpi===300 && narrow<2) add('warn',li,`<b>Barcode</b> narrow=${narrow} at 300 DPI may be too thin — use ≥2`);
+    }
+  }
+
+  // ── Duplicate/overlapping element checks ──────────────────────────
+  const positions=[];
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(!raw||raw.startsWith(';')) continue;
+    const oneU=raw[0].toUpperCase();
+    if((oneU==='A'||oneU==='B')){
+      const p=extractParams(raw.slice(1).trim());
+      if(p.length>=2){
+        const x=+p[0],y=+p[1];
+        const key=`${oneU}:${x},${y}`;
+        const prev=positions.find(p=>p.key===key);
+        if(prev) add('warn',li,`<b>${oneU} command</b> at (${x},${y}) overlaps with line ${prev.li+1+pageOffset}`);
+        else positions.push({key,li});
+      }
+    }
+  }
+
+  // ── Whitespace / encoding warnings ────────────────────────────────
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li];  // don't trim — check for tabs
+    if(raw.includes('	')) add('warn',li,`Line ${li+1} contains a <b>tab character</b> — use spaces. Some printers reject EPL with tabs.`);
+    // Windows CRLF is fine, but mixed line endings can confuse some firmware
+    for(let ci=0;ci<raw.length;ci++){
+      if(raw.charCodeAt(ci)>127){
+        add('err',li,`Line ${li+1} contains <b>non-ASCII character</b> at position ${ci} (U+${raw.charCodeAt(ci).toString(16).toUpperCase()}) — EPL2 only supports ASCII`);
+        break;
+      }
+    }
+  }
+
+  // ── N command position check ───────────────────────────────────────
+  // N should be at or near the start, not buried in the middle
+  for(let li=1;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(raw==='N'){
+      // Check if there were printable commands before this N
+      const before=lines.slice(0,li).map(l=>l.trim()).filter(l=>l&&!l.startsWith(';')&&l!=='N');
+      if(before.some(l=>/^[AaBbLGX]/i.test(l))){
+        add('warn',li,`<b>N</b> (clear buffer) found after draw commands — this will erase everything drawn above it`);
+      }
+    }
+  }
+
+  // ── Document-level checks ─────────────────────────────────────────
+  if(!hasN)  add('warn',-1,`Missing <b>N</b> (clear buffer) command at start`);
+  if(!hasP)  add('warn',-1,`Missing <b>P</b> (print) command at end`);
+  if(!hasq)  add('info',-1,`No <b>q</b> label width command — using selector default (${labelW} dots)`);
+  if(!hasQ)  add('info',-1,`No <b>Q</b> label height command — using selector default (${labelH} dots)`);
+
+  // ── DPI mismatch hint ─────────────────────────────────────────────
+  // If q value implies a very different DPI than selected, flag it
+  for(let li=0;li<lines.length;li++){
+    const raw=lines[li].trim();
+    if(raw[0]==='q'){
+      const qw=+raw.slice(1).trim();
+      // Common label widths at different DPIs for 4" stock
+      const implied = qw/4; // dots per inch if label is 4" wide
+      if(Math.abs(implied-dpi)>50 && Math.abs(implied-dpi/2)>50){
+        add('warn',li,`<b>q${qw}</b> implies ~${Math.round(implied)} DPI for a 4" label, but printer DPI is set to ${dpi}. Check your DPI setting.`);
+      }
+    }
+  }
+
+  return issues;
+}
+
+function runLinter(){
+  const issues=lintEPL2(eplInput.value, state.dpi);
+  const panel=document.getElementById('lint-panel');
+  const itemsEl=document.getElementById('lint-items');
+  if(!panel||!itemsEl) return;
+
+  const errs=issues.filter(i=>i.type==='err');
+  const warns=issues.filter(i=>i.type==='warn');
+  const infos=issues.filter(i=>i.type==='info');
+
+  if(issues.length===0){
+    panel.className='empty';
+    return;
+  }
+  panel.className='';
+
+  document.getElementById('lint-err-count').textContent=errs.length?`✕ ${errs.length} error${errs.length>1?'s':''}`:'' ;
+  document.getElementById('lint-warn-count').textContent=warns.length?`⚠ ${warns.length} warning${warns.length>1?'s':''}`:'' ;
+  document.getElementById('lint-info-count').textContent=infos.length?`ℹ ${infos.length} hint${infos.length>1?'s':''}`:'' ;
+
+  itemsEl.innerHTML='';
+  // Sort: errors first, then warnings, then info
+  const sorted=[...errs,...warns,...infos];
+  sorted.forEach(issue=>{
+    const div=document.createElement('div');
+    div.className=`lint-item ${issue.type}`;
+    const lineNum=issue.lineIdx>=0?issue.lineIdx+1:'—';
+    div.innerHTML=`
+      <span class="lint-badge ${issue.type}">${issue.type==='err'?'ERR':issue.type==='warn'?'WARN':'INFO'}</span>
+      <span class="lint-line-num">${lineNum}</span>
+      <span class="lint-msg">${issue.msg}</span>`;
+    // Click to jump to that line
+    if(issue.lineIdx>=0){
+      div.addEventListener('click',()=>{
+        setHighlightedLines([issue.lineIdx]);
+      });
+    }
+    itemsEl.appendChild(div);
+  });
+}
 
 // ── RENDER TRIGGER ────────────────────────────────────────────────
 document.getElementById('btn-render').onclick=render;
 
 // Auto zoom-to-fit on initial load
-window.addEventListener('load', ()=>{ render(); });
+window.addEventListener('load', ()=>{ render(); historySave(); });
 
 document.getElementById('btn-page-prev').addEventListener('click',()=>{
   if(state.currentPage>0){state.currentPage--;render();}
@@ -2134,9 +2724,14 @@ document.getElementById('btn-page-del').addEventListener('click',()=>{
   eplInput.value=joinPages(pages);
   render();
 });
-eplInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();render();}});
+eplInput.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){e.preventDefault();historyUndo();return;}
+  if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();historyRedo();return;}if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();render();}});
 let rtimer;
-eplInput.addEventListener('input',()=>{clearTimeout(rtimer);rtimer=setTimeout(render,500);});
+eplInput.addEventListener('input',()=>{
+  clearTimeout(rtimer);
+  rtimer=setTimeout(()=>{ historySave(); render(); },500);
+});
 document.getElementById('sel-dpi').addEventListener('change', function(){
   state.dpi = parseInt(this.value) || 203;
   render();
@@ -2177,6 +2772,7 @@ function applyLabelSize(wIn, hIn, gapIn){
   if(hadQ) pageSrc = pageSrc.replace(/^Q\d+,\d+$/m, `Q${hDots},${gapDots}`);
   else     pageSrc = pageSrc.replace(/^q\d+$/m, m => m + `\nQ${hDots},${gapDots}`);
 
+  historySave();
   eplInput.value = setPageSrc(eplInput.value, state.currentPage, pageSrc);
   render();
   zoomToFit();
@@ -2190,18 +2786,34 @@ document.getElementById('sel-size').addEventListener('change', function(){
 
 // ── KEYBOARD SHORTCUTS ────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
-  if(document.activeElement===eplInput||document.activeElement.tagName==='INPUT') return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){e.preventDefault();historyUndo();return;}
+  if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();historyRedo();return;}
 
-  // Tool shortcuts
-  if(e.key==='f'){zoomToFit();return;}
-  if(e.key==='v'||e.key==='Escape'){setTool('select');return;}
-  if(e.key==='t'){setTool('text');return;}
-  if(e.key==='h'){setTool('hline');return;}
-  if(e.key==='l'){setTool('vline');return;}
-  if(e.key==='b'){setTool('box');return;}
-  if(e.key==='o'){setTool('box-outline');return;}
-  if(e.key==='c'){setTool('barcode');return;}
-  if(e.key==='m'){setTool('datamatrix');return;}
+  // Ctrl+Delete — delete ALL selected elements
+  if((e.key==='Delete'||e.key==='Backspace')&&(e.ctrlKey||e.metaKey)){
+    if(!state.parsed) return;
+    const allSelected=new Set(state.selectedIdxs);
+    if(state.selectedIdx!==null) allSelected.add(state.selectedIdx);
+    if(allSelected.size===0) return;
+    e.preventDefault();
+    historySave();
+    const toDelete=[...allSelected]
+      .map(i=>state.parsed.cmds[i]).filter(Boolean)
+      .sort((a,b)=>b.lineIdx-a.lineIdx);
+    let src=getPageSrc(eplInput.value,state.currentPage);
+    toDelete.forEach(c=>{ src=deleteLine(src,c.lineIdx); });
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,src);
+    state.selectedIdxs.clear(); state.selectedIdx=null;
+    render();
+    return;
+  }
+  // Plain Delete — delete single selected element
+  if(e.key==='Delete'||e.key==='Backspace'){
+    if(!state.parsed||state.selectedIdx===null) return;
+    e.preventDefault();
+    onDelete(state.selectedIdx);
+    return;
+  }
 
   // Arrow nudge on selected element
   if(state.selectedIdx===null||!state.parsed) return;
@@ -2214,11 +2826,11 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowRight')dx=step;
   if(e.key==='ArrowUp')dy=-step;
   if(e.key==='ArrowDown')dy=step;
-  if(e.key==='Delete'||e.key==='Backspace'){onDelete(state.selectedIdx);return;}
   if(!dx&&!dy) return;
   e.preventDefault();
   cmd.x=Math.max(0,(cmd.x||0)+dx);
   cmd.y=Math.max(0,(cmd.y||0)+dy);
+  historySave();
   eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
   render();
   buildPropsPanel(cmd,onPropUpdate,()=>onDelete(state.selectedIdx));
@@ -2570,6 +3182,7 @@ render();
     const b64=btoa(_gwCmd.data);
     const gwLine=`GW${_gwCmd.x},${_gwCmd.y},${_gwCmd.bpr},${_gwCmd.h_dots},B64:${b64}`;
     const inp=document.getElementById('epl-input');
+    historySave();
     inp.value=setPageSrc(inp.value,state.currentPage,insertLine(getPageSrc(inp.value,state.currentPage),gwLine));
     render();
     closeModal();
@@ -2578,6 +3191,167 @@ render();
 
   // Expose openModal for tool click handler
   window.openImageModal=openModal;
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════
+// ALIGN TOOLBAR
+// ═══════════════════════════════════════════════════════════════════
+(function(){
+  let alignMode='sel'; // 'sel' = relative to selection bbox, 'label' = relative to label
+
+  function updateAlignToolbar(){
+    const bar=document.getElementById('align-toolbar');
+    if(!bar) return;
+    const allSelected=new Set(state.selectedIdxs);
+    if(state.selectedIdx!==null) allSelected.add(state.selectedIdx);
+    const count=allSelected.size;
+    if(count<2){ bar.classList.remove('visible'); return; }
+    bar.classList.add('visible');
+    document.getElementById('at-count').textContent=count+' selected ·';
+  }
+
+  // Hook into buildOverlay so toolbar updates whenever selection changes
+  const _origBuildOverlay=buildOverlay;
+  window.buildOverlay=function(){
+    _origBuildOverlay();
+    updateAlignToolbar();
+  };
+
+  // Mode toggle
+  document.getElementById('at-mode-sel').addEventListener('click',()=>{
+    alignMode='sel';
+    document.getElementById('at-mode-sel').classList.add('active');
+    document.getElementById('at-mode-label').classList.remove('active');
+  });
+  document.getElementById('at-mode-label').addEventListener('click',()=>{
+    alignMode='label';
+    document.getElementById('at-mode-label').classList.add('active');
+    document.getElementById('at-mode-sel').classList.remove('active');
+  });
+
+  function getSelectedCmds(){
+    if(!state.parsed) return [];
+    const allSelected=new Set(state.selectedIdxs);
+    if(state.selectedIdx!==null) allSelected.add(state.selectedIdx);
+    return [...allSelected].map(i=>state.parsed.cmds[i]).filter(Boolean);
+  }
+
+  function getCmdBB(cmd){
+    // Get bounding box of a cmd in dots
+    const scale=1; // work in dot space
+    const bb=getBB(cmd, scale*(state.zoom*(203/(state.dpi||203))));
+    if(!bb) return {x:cmd.x||0, y:cmd.y||0, w:0, h:0};
+    const s=state.zoom*(203/(state.dpi||203));
+    return {x:Math.round(bb.x/s), y:Math.round(bb.y/s), w:Math.round(bb.w/s), h:Math.round(bb.h/s)};
+  }
+
+  function applyAlign(fn){
+    const cmds=getSelectedCmds();
+    if(cmds.length<2) return;
+
+    // Get bboxes in dot space
+    const boxes=cmds.map(c=>({cmd:c, bb:getCmdBB(c)}));
+
+    // Reference bounds
+    let refX, refY, refW, refH;
+    if(alignMode==='label'&&state.parsed){
+      refX=0; refY=0;
+      refW=state.parsed.cfg.width;
+      refH=state.parsed.cfg.height;
+    } else {
+      // Selection bounding box
+      refX=Math.min(...boxes.map(b=>b.bb.x));
+      refY=Math.min(...boxes.map(b=>b.bb.y));
+      const refR=Math.max(...boxes.map(b=>b.bb.x+b.bb.w));
+      const refB=Math.max(...boxes.map(b=>b.bb.y+b.bb.h));
+      refW=refR-refX; refH=refB-refY;
+    }
+
+    historySave();
+    boxes.forEach(({cmd,bb})=>{
+      const newPos=fn(cmd, bb, refX, refY, refW, refH);
+      if(newPos.x!==undefined) cmd.x=Math.max(0,Math.round(newPos.x));
+      if(newPos.y!==undefined) cmd.y=Math.max(0,Math.round(newPos.y));
+    });
+
+    // Batch write
+    let pageSrc=getPageSrc(eplInput.value,state.currentPage);
+    [...cmds].sort((a,b)=>b.lineIdx-a.lineIdx).forEach(c=>{
+      pageSrc=updateLine(pageSrc,c.lineIdx,cmdToEPLLine(c));
+    });
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,pageSrc);
+    render();
+  }
+
+  function applyDistribute(axis){
+    const cmds=getSelectedCmds();
+    if(cmds.length<3) return; // need 3+ for distribution
+    const boxes=cmds.map(c=>({cmd:c, bb:getCmdBB(c)}));
+
+    if(axis==='h'){
+      // Sort by x
+      boxes.sort((a,b)=>a.bb.x-b.bb.x);
+      const first=boxes[0], last=boxes[boxes.length-1];
+      const totalSpace=(last.bb.x+last.bb.w)-(first.bb.x);
+      const totalItemW=boxes.reduce((s,b)=>s+b.bb.w,0);
+      const gap=(totalSpace-totalItemW)/(boxes.length-1);
+      let cursor=first.bb.x+first.bb.w+gap;
+      historySave();
+      for(let i=1;i<boxes.length-1;i++){
+        boxes[i].cmd.x=Math.max(0,Math.round(cursor));
+        cursor+=boxes[i].bb.w+gap;
+      }
+    } else {
+      // Sort by y
+      boxes.sort((a,b)=>a.bb.y-b.bb.y);
+      const first=boxes[0], last=boxes[boxes.length-1];
+      const totalSpace=(last.bb.y+last.bb.h)-(first.bb.y);
+      const totalItemH=boxes.reduce((s,b)=>s+b.bb.h,0);
+      const gap=(totalSpace-totalItemH)/(boxes.length-1);
+      let cursor=first.bb.y+first.bb.h+gap;
+      historySave();
+      for(let i=1;i<boxes.length-1;i++){
+        boxes[i].cmd.y=Math.max(0,Math.round(cursor));
+        cursor+=boxes[i].bb.h+gap;
+      }
+    }
+
+    let pageSrc=getPageSrc(eplInput.value,state.currentPage);
+    [...cmds].sort((a,b)=>b.lineIdx-a.lineIdx).forEach(c=>{
+      pageSrc=updateLine(pageSrc,c.lineIdx,cmdToEPLLine(c));
+    });
+    eplInput.value=setPageSrc(eplInput.value,state.currentPage,pageSrc);
+    render();
+  }
+
+  // Wire up buttons
+  document.getElementById('at-align-left').addEventListener('click',()=>
+    applyAlign((cmd,bb,rx)=>({x: rx}))
+  );
+  document.getElementById('at-align-hcenter').addEventListener('click',()=>
+    applyAlign((cmd,bb,rx,ry,rw)=>({x: rx+rw/2-bb.w/2}))
+  );
+  document.getElementById('at-align-right').addEventListener('click',()=>
+    applyAlign((cmd,bb,rx,ry,rw)=>({x: rx+rw-bb.w}))
+  );
+  document.getElementById('at-align-top').addEventListener('click',()=>
+    applyAlign((cmd,bb,rx,ry)=>({y: ry}))
+  );
+  document.getElementById('at-align-vcenter').addEventListener('click',()=>
+    applyAlign((cmd,bb,rx,ry,rw,rh)=>({y: ry+rh/2-bb.h/2}))
+  );
+  document.getElementById('at-align-bottom').addEventListener('click',()=>
+    applyAlign((cmd,bb,rx,ry,rw,rh)=>({y: ry+rh-bb.h}))
+  );
+  document.getElementById('at-dist-h').addEventListener('click',()=>applyDistribute('h'));
+  document.getElementById('at-dist-v').addEventListener('click',()=>applyDistribute('v'));
+
+  // Hide when selection drops below 2
+  const origRender=window.render||render;
+  // Update on render too
+  const _origRender=render;
+  window._alignRenderHook=updateAlignToolbar;
 })();
 
 </script>
