@@ -61,8 +61,8 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
 
 /* ── LEFT: EPL SOURCE ── */
 #source-panel {
-  width: 260px; flex-shrink: 0; background: #13192e;
-  border-right: 1px solid #1e3a5f; display: flex; flex-direction: column;
+  width: 500px; min-width: 180px; max-width: 60vw; flex-shrink: 0; background: #13192e;
+  border-right: 1px solid #1e3a5f; display: flex; flex-direction: column; position: relative;
 }
 #source-panel .panel-head {
   font-size: 10px; color: #556; padding: 7px 10px 5px; text-transform: uppercase;
@@ -75,7 +75,7 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
   width: 32px; flex-shrink: 0; background: #0a1018; color: #2a4a6a;
   font-family: 'Fira Code', 'Consolas', monospace; font-size: 11px; line-height: 1.65;
   padding: 8px 4px 8px 0; text-align: right; user-select: none; overflow: hidden;
-  border-right: 1px solid #1a2a3a;
+  border-right: 1px solid #1a2a3a; white-space: nowrap;
 }
 #epl-line-nums .ln { display: block; padding-right: 6px; }
 #epl-line-nums .ln.hl { color: #e94560; background: rgba(233,69,96,0.15); }
@@ -83,7 +83,7 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
   flex: 1; background: transparent; color: #7aadcc; border: none; outline: none;
   font-family: 'Fira Code', 'Consolas', monospace; font-size: 11px; line-height: 1.65;
   padding: 8px 10px; resize: none; tab-size: 2; position: relative; z-index: 1;
-  caret-color: #fff;
+  caret-color: #fff; white-space: pre; overflow-x: auto; overflow-y: auto;
 }
 #source-footer { padding: 6px 10px; border-top: 1px solid #1e3a5f; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 #lint-panel { flex-shrink:0; max-height:180px; overflow-y:auto; border-top:1px solid #1e3a5f; background:#0a1018; }
@@ -233,6 +233,17 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
 #align-toolbar .at-mode.active { background:#1a3050; border-color:#3a5a8a; color:#8ab; }
 #align-toolbar .at-count { font-size:10px; color:#4a6a8a; margin-right:2px; }
 
+
+/* ── RESIZE HANDLES ── */
+.panel-resize-handle {
+  position: absolute; top: 0; right: -3px; width: 6px; height: 100%;
+  cursor: col-resize; z-index: 100; background: transparent;
+  transition: background 0.15s;
+}
+.panel-resize-handle:hover, .panel-resize-handle.dragging {
+  background: rgba(74,158,255,0.3);
+}
+
 </style>
 </head>
 <body>
@@ -293,6 +304,7 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
   <button class="tool-btn" data-tool="box-outline" id="tool-box-outline"><span class="tool-icon">▯</span> Outline Box</button>
   <button class="tool-btn" data-tool="barcode" id="tool-barcode"><span class="tool-icon">⌥</span> Barcode</button>
   <button class="tool-btn" data-tool="datamatrix" id="tool-datamatrix"><span class="tool-icon">▦</span> Data Matrix</button>
+  <button class="tool-btn" data-tool="slant" id="tool-slant"><span class="tool-icon">╱</span> Diagonal</button>
   <button class="tool-btn" data-tool="image" id="tool-image"><span class="tool-icon">🖼</span> Image</button>
 
   <div id="snap-controls">
@@ -308,6 +320,7 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
 
   <!-- SOURCE PANEL -->
   <div id="source-panel">
+    <div class="panel-resize-handle" id="source-resize-handle"></div>
     <div class="panel-head">EPL2 Source <span style="color:#567;font-size:9px;margin-left:6px">(images shown as B64 — use ⬇ Download for printer-ready binary)</span></div>
     <div id="epl-editor-wrap">
       <div id="epl-line-nums"></div>
@@ -406,6 +419,7 @@ P1</textarea>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">H / L</td><td style="padding:2px 0;">H-bar / V-bar</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">B / O</td><td style="padding:2px 0;">Filled box / Outline box</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">C / M</td><td style="padding:2px 0;">Barcode / Data matrix</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">D</td><td style="padding:2px 0;">Diagonal line (LS)</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">F</td><td style="padding:2px 0;">Zoom to fit</td></tr>
         <tr><td colspan="2" style="padding:4px 0 2px;color:#2a4a5a;border-top:1px solid #1a2a3a;"></td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Click</td><td style="padding:2px 0;">Select element</td></tr>
@@ -413,7 +427,7 @@ P1</textarea>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Drag canvas</td><td style="padding:2px 0;">Rubber-band select</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Drag element</td><td style="padding:2px 0;">Move (multi: moves all)</td></tr>
         <tr><td colspan="2" style="padding:4px 0 2px;color:#2a4a5a;border-top:1px solid #1a2a3a;"></td></tr>
-        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Delete</td><td style="padding:2px 0;">Delete selected</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Delete</td><td style="padding:2px 0;">Delete selected element</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Ctrl+Delete</td><td style="padding:2px 0;">Delete all selected</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Ctrl+Z / Ctrl+Y</td><td style="padding:2px 0;">Undo / Redo</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Arrow keys</td><td style="padding:2px 0;">Nudge (Shift = snap size)</td></tr>
@@ -893,7 +907,7 @@ function parseEPL2(src, dpi, wIn, hIn){
       continue;
     }
     if(two==='LE'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_ERASE',x:+p[0]||0,y:+p[1]||0,w:+p[2]||0,h:+p[3]||0,lineIdx:li});continue;}
-    if(two==='LS'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_HORIZ',x:+p[0]||0,y:+p[1]||0,w:+p[2]||0,t:+p[3]||1,lineIdx:li});continue;}
+    if(two==='LS'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_SLANT',x:+p[0]||0,y:+p[1]||0,x2:+p[2]||0,y2:+p[3]||0,t:+p[4]||1,lineIdx:li});continue;}
     if(two==='LV'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_VERT', x:+p[0]||0,y:+p[1]||0,h:+p[2]||0,t:+p[3]||1,lineIdx:li});continue;}
     if(two==='LD'){const p=extractParams(raw.slice(2).trim());cmds.push({type:'LINE_DIAG',x1:+p[0]||0,y1:+p[1]||0,x2:+p[2]||0,y2:+p[3]||0,t:+p[4]||1,lineIdx:li});continue;}
     if(two==='GW'){
@@ -984,6 +998,9 @@ function renderEPL2(cmds,cfg,canvas,zoom,dpi){
       case 'LINE_DIAG':
         ctx.strokeStyle='#000'; ctx.lineWidth=Math.max(1,px(cmd.t));
         ctx.beginPath(); ctx.moveTo(px(cmd.x1),px(cmd.y1)); ctx.lineTo(px(cmd.x2),px(cmd.y2)); ctx.stroke(); break;
+      case 'LINE_SLANT':
+        ctx.strokeStyle='#000'; ctx.lineWidth=Math.max(1,px(cmd.t||1));
+        ctx.beginPath(); ctx.moveTo(px(cmd.x),px(cmd.y)); ctx.lineTo(px(cmd.x2),px(cmd.y2)); ctx.stroke(); break;
       case 'TEXT':    drawText(ctx,cmd,scale); break;
       case 'BARCODE': drawBarcode(ctx,cmd,scale); break;
       case 'DATAMATRIX': drawDataMatrix(ctx,cmd,scale); break;
@@ -1394,6 +1411,11 @@ function getBB(cmd,scale){
     case 'LINE_VERT':{
       return {x:p(cmd.x),y:p(cmd.y),w:Math.max(4,p(cmd.t)),h:Math.max(4,p(cmd.h)),rw:false,rh:true};
     }
+    case 'LINE_SLANT':{
+      const sx=Math.min(p(cmd.x),p(cmd.x2)),sy=Math.min(p(cmd.y),p(cmd.y2));
+      const sw=Math.max(4,Math.abs(p(cmd.x2)-p(cmd.x))),sh=Math.max(4,Math.abs(p(cmd.y2)-p(cmd.y)));
+      return {x:sx,y:sy,w:sw,h:sh,rw:false,rh:false};
+    }
     default: return null;
   }
 }
@@ -1420,7 +1442,9 @@ function cmdToEPLLine(cmd){
     case 'LINE_ERASE':
       return `LE${cmd.x},${cmd.y},${cmd.w},${cmd.h}`;
     case 'LINE_HORIZ':
-      return `LS${cmd.x},${cmd.y},${cmd.w},${cmd.t}`;
+      return `LO${cmd.x},${cmd.y},${cmd.w},${cmd.t||3}`;  // horizontal bar = thin LO box
+    case 'LINE_SLANT':
+      return `LS${cmd.x},${cmd.y},${cmd.x2},${cmd.y2},${cmd.t||1}`;
     case 'LINE_VERT':
       return `LV${cmd.x},${cmd.y},${cmd.h},${cmd.t}`;
     case 'GRAPHIC_WRITE':
@@ -1559,7 +1583,7 @@ function buildPropsPanel(cmd,onUpdate,onDelete,onLayer){
   if(!cmd){label.textContent='';content.style.display='none';noSel.style.display='block';return;}
   content.style.display='block';noSel.style.display='none';
 
-  const typeNames={BOX_OUTLINE:'Outline Box',TEXT:'Text',BARCODE:'Barcode',DATAMATRIX:'Data Matrix',GRAPHIC_WRITE:'Image (GW)',LINE_OPAQUE:'Filled Box',LINE_ERASE:'Erase Box',LINE_HORIZ:'H-Line',LINE_VERT:'V-Line'};
+  const typeNames={BOX_OUTLINE:'Outline Box',TEXT:'Text',BARCODE:'Barcode',DATAMATRIX:'Data Matrix',GRAPHIC_WRITE:'Image (GW)',LINE_OPAQUE:'Filled Box',LINE_ERASE:'Erase Box',LINE_HORIZ:'H-Line',LINE_VERT:'V-Line',LINE_SLANT:'Diagonal Line'};
   label.textContent=typeNames[cmd.type]||cmd.type;
 
   function row(label,input){
@@ -1863,6 +1887,8 @@ function setHighlightedLines(lineIndices){
   for(let i = 0; i <= lastLine; i++) charEnd += lines[i].length + 1;
   charEnd -= 1; // don't include trailing newline
 
+  // Focus textarea and select the line text so it's visually highlighted
+  // Safe to call — mousedown handler (not focus) is used for clearing, so this won't deselect
   eplInput.focus();
   eplInput.setSelectionRange(charStart, charEnd);
   scrollToLine(firstLine);
@@ -1924,7 +1950,7 @@ function buildOverlay(){
 
   if(!state.parsed) return;
   const scale=state.zoom*(203/(state.dpi||203));
-  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT'];
+  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT','LINE_SLANT'];
 
   state.parsed.cmds.forEach((cmd,idx)=>{
     if(!draggable.includes(cmd.type)) return;
@@ -1980,17 +2006,23 @@ function startDrag(e, primaryIdx){
   // Snapshot origins of all selected elements at drag start
   const dragTargets=[...state.selectedIdxs].map(i=>{
     const c=state.parsed.cmds[i];
-    return c?{cmd:c, ox:c.x||0, oy:c.y||0}:null;
+    if(!c) return null;
+    return {cmd:c, ox:c.x||0, oy:c.y||0, ox2:c.x2, oy2:c.y2};
   }).filter(Boolean);
-  if(dragTargets.length===0) dragTargets.push({cmd:primaryCmd, ox:primaryCmd.x||0, oy:primaryCmd.y||0});
+  if(dragTargets.length===0) dragTargets.push({cmd:primaryCmd, ox:primaryCmd.x||0, oy:primaryCmd.y||0, ox2:primaryCmd.x2, oy2:primaryCmd.y2});
 
   let moved=false;
   function move(ev){
     const dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
     if(!moved&&(Math.abs(dx)>2||Math.abs(dy)>2)){ historySave(); moved=true; }
-    dragTargets.forEach(({cmd:c,ox,oy})=>{
+    dragTargets.forEach(({cmd:c,ox,oy,ox2,oy2})=>{
       c.x=Math.max(0,snap(ox+dx,grid));
       c.y=Math.max(0,snap(oy+dy,grid));
+      // For diagonal lines, also translate the second endpoint
+      if(c.type==='LINE_SLANT'&&ox2!==undefined){
+        c.x2=Math.max(0,snap(ox2+dx,grid));
+        c.y2=Math.max(0,snap(oy2+dy,grid));
+      }
     });
     let pageSrc=getPageSrc(eplInput.value,state.currentPage);
     [...dragTargets].sort((a,b)=>b.cmd.lineIdx-a.cmd.lineIdx).forEach(({cmd:c})=>{
@@ -2162,6 +2194,8 @@ overlay.addEventListener('mousedown',e=>{
     newCmd={type:'BARCODE',x:dotX,y:dotY,rot:0,btype:'A',narrow:2,wide:5,h:80,hri:true,data:'12345678'};
   } else if(state.activeTool==='datamatrix'){
     newCmd={type:'DATAMATRIX',x:dotX,y:dotY,dmtype:'D',module:15,data:'12345'};
+  } else if(state.activeTool==='slant'){
+    newCmd={type:'LINE_SLANT',x:dotX,y:dotY,x2:dotX+100,y2:dotY+100,t:3};
   } else if(state.activeTool==='image'){
     window.openImageModal(dotX,dotY);
     setTool('select');
@@ -2253,7 +2287,7 @@ overlay.addEventListener('mousedown',e=>{
   if(!rb) return;
   rb.style.cssText=`display:block;left:${startX}px;top:${startY}px;width:0;height:0;`;
 
-  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT'];
+  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT','LINE_SLANT'];
 
   function rbMove(ev){
     const cx=ev.clientX-rect.left, cy=ev.clientY-rect.top;
@@ -2386,6 +2420,32 @@ function updateLabelBoundary(cfg){
 }
 document.getElementById('btn-undo').addEventListener('click', historyUndo);
 document.getElementById('btn-redo').addEventListener('click', historyRedo);
+
+// ── RESIZABLE PANELS ─────────────────────────────────────────────
+(function(){
+  function makeResizable(handleId, panelId, side){
+    const handle=document.getElementById(handleId);
+    const panel=document.getElementById(panelId);
+    if(!handle||!panel) return;
+    handle.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      handle.classList.add('dragging');
+      const startX=e.clientX;
+      const startW=panel.offsetWidth;
+      function move(ev){
+        const dx=ev.clientX-startX;
+        const newW=side==='right'?startW+dx:startW-dx;
+        const min=parseInt(panel.style.minWidth)||180;
+        const max=window.innerWidth*0.6;
+        panel.style.width=Math.min(max,Math.max(min,newW))+'px';
+      }
+      function up(){ handle.classList.remove('dragging'); document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up); }
+      document.addEventListener('mousemove',move);
+      document.addEventListener('mouseup',up);
+    });
+  }
+  makeResizable('source-resize-handle','source-panel','right');
+})();
 document.getElementById('btn-zoom-in').onclick=()=>setZoom(state.zoom*1.2);
 document.getElementById('btn-zoom-out').onclick=()=>setZoom(state.zoom/1.2);
 document.getElementById('btn-zoom-fit').onclick=zoomToFit;
@@ -2482,7 +2542,7 @@ function lintEPL2(src, dpi){
     }
 
     // ── Lines (LO, LE, LS, LV) ───────────────────────────────────
-    if(two==='LO'||two==='LE'||two==='LS'||two==='LV'){
+    if(two==='LO'||two==='LE'||two==='LV'){
       const p=extractParams(raw.slice(2).trim());
       if(p.length<4){add('err',li,`<b>${two}</b> needs 4 params, got ${p.length}`);continue;}
       const x=+p[0],y=+p[1],w=+p[2],h=+p[3];
@@ -2519,6 +2579,15 @@ function lintEPL2(src, dpi){
       if(remaining.length>0){
         add('err',li,`<b>P${qty}</b> is not the last command — ${remaining.length} line(s) follow (e.g. <b>${remaining[0].slice(0,20)}</b>). Commands after P are ignored by the printer.`);
       }
+    }
+
+    // ── LS diagonal line ──────────────────────────────────────────
+    if(two==='LS'){
+      const p=extractParams(raw.slice(2).trim());
+      if(p.length<4){add('err',li,`<b>LS</b> needs 4-5 params (x1,y1,x2,y2[,thickness]), got ${p.length}`);continue;}
+      const x1=+p[0],y1=+p[1],x2=+p[2],y2=+p[3];
+      if(x1<0||y1<0||x2<0||y2<0) add('err',li,`<b>LS</b> coordinates must be ≥0`);
+      if(x1===x2&&y1===y2) add('warn',li,`<b>LS</b> start and end points are identical — zero-length line`);
     }
 
     // ── X command (box with rounded corners) ─────────────────────
@@ -2724,6 +2793,63 @@ document.getElementById('btn-page-del').addEventListener('click',()=>{
   eplInput.value=joinPages(pages);
   render();
 });
+function clearCanvasSelection(){
+  state.selectedIdx=null;
+  state.selectedIdxs.clear();
+  buildOverlay();
+  if(typeof window._alignRenderHook==='function') window._alignRenderHook();
+  const pc=document.getElementById('props-content');
+  const ns=document.getElementById('no-selection');
+  const pl=document.getElementById('props-type-label');
+  if(pc&&ns&&pl){pc.style.display='none';ns.style.display='block';pl.textContent='';}
+}
+// mousedown: just a placeholder — actual selection logic is in click handler
+// We don't clear here because click fires right after and handles everything
+
+// mouseup/click: after cursor lands, find which line was clicked and select matching canvas element
+eplInput.addEventListener('click',()=>{
+  if(!state.parsed){ clearCanvasSelection(); return; }
+  // Get the line number of the cursor in the full source
+  const pos=eplInput.selectionStart;
+  const textBefore=eplInput.value.substring(0,pos);
+  const fullLineIdx=textBefore.split('\n').length-1;
+
+  // Convert full-source line index to page-relative line index
+  const pages=splitPages(eplInput.value);
+  let pageOffset=0;
+  for(let i=0;i<(state.currentPage||0);i++) pageOffset+=pages[i].split(/\r?\n/).length;
+  const pageLineIdx=fullLineIdx-pageOffset;
+
+  // Find a cmd whose lineIdx matches (or lineIdx+1 for BOX_OUTLINE which spans 2 lines)
+  const cmd=state.parsed.cmds.find(c=>c.lineIdx===pageLineIdx||(c.type==='BOX_OUTLINE'&&c.lineIdx+1===pageLineIdx));
+  if(!cmd){ clearCanvasSelection(); return; }
+
+  const idx=state.parsed.cmds.indexOf(cmd);
+  if(idx<0) return;
+
+  // Select it on canvas
+  state.selectedIdx=idx;
+  state.selectedIdxs.clear();
+  state.selectedIdxs.add(idx);
+  buildOverlay();
+  buildPropsPanel(cmd,onPropUpdate,()=>onDelete(idx),(dir)=>doMoveLayer(idx,dir));
+
+  // Highlight the line in gutter (without re-focusing textarea which would loop)
+  _hlLines=new Set([cmd.lineIdx]);
+  if(cmd.type==='BOX_OUTLINE') _hlLines.add(cmd.lineIdx+1);
+  updateEditorGutter();
+
+  // Scroll canvas to show the element
+  const scale=state.zoom*(203/(state.dpi||203));
+  const bb=getBB(cmd,scale);
+  if(bb){
+    const canvasArea=document.getElementById('canvas-scroll');
+    if(canvasArea){
+      canvasArea.scrollTop=Math.max(0,bb.y-80);
+      canvasArea.scrollLeft=Math.max(0,bb.x-80);
+    }
+  }
+});
 eplInput.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){e.preventDefault();historyUndo();return;}
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();historyRedo();return;}if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();render();}});
@@ -2790,7 +2916,7 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();historyRedo();return;}
 
   // Ctrl+Delete — delete ALL selected elements
-  if((e.key==='Delete'||e.key==='Backspace')&&(e.ctrlKey||e.metaKey)){
+  if(e.key==='Delete'&&(e.ctrlKey||e.metaKey)){
     if(!state.parsed) return;
     const allSelected=new Set(state.selectedIdxs);
     if(state.selectedIdx!==null) allSelected.add(state.selectedIdx);
@@ -2808,7 +2934,7 @@ document.addEventListener('keydown',e=>{
     return;
   }
   // Plain Delete — delete single selected element
-  if(e.key==='Delete'||e.key==='Backspace'){
+  if(e.key==='Delete'){
     if(!state.parsed||state.selectedIdx===null) return;
     e.preventDefault();
     onDelete(state.selectedIdx);
