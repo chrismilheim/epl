@@ -1098,11 +1098,10 @@ function drawBarcode(ctx,cmd,scale){
   const {bars,isC39}=getBarBits(cmd);
   if(!bars) return;
 
-  // The bounding box width (in dots) is the ground truth total width.
-  // Back-calculate the exact pixel-per-module ratio so bars fill it precisely,
-  // eliminating rounding drift between getBB and the rendered barcode.
+  // Use getBB's exact width as ground truth so render always matches bounding box
   const totalDots = barWidthDots(bars, isC39, narrow, wide);
-  const targetWidthPx = totalDots * scale;          // exact float px the BB uses
+  const bbDots = totalDots * BAR_WIDTH_FACTOR;
+  const targetWidthPx = bbDots * scale;  // matches getBB's bw exactly
   const bh = Math.round(h * scale);
 
   ctx.save();
@@ -1122,7 +1121,7 @@ function drawBarcode(ctx,cmd,scale){
   // BAR_WIDTH_FACTOR calibrated from real Zebra renderer:
   // "1Z999AA10123456784" Code128 (233 modules, narrow=2) → real end=640 (590 dots)
   // bare = 466 dots → factor = 590/466 = 1.2661
-  const pxPerUnit = targetWidthPx / (totalDots / narrow) * BAR_WIDTH_FACTOR;
+  const pxPerUnit = targetWidthPx / (totalDots / narrow);  // BAR_WIDTH_FACTOR already in targetWidthPx
 
   let dotPos=0;
   i=0;
@@ -1301,8 +1300,8 @@ function drawDataMatrix(ctx,cmd,scale){
     ctx.fillText('DM?',Math.round(x*scale)+2,Math.round(y*scale)+12);
     return;
   }
-  // mod = pixels per DM cell
-  const mod=Math.max(1, moduleDots*scale*2.5);
+  // mod = pixels per DM cell (scale already encodes zoom*(203/dpi))
+  const mod=Math.max(1, moduleDots*scale);
   const ox=Math.round(x*scale), oy=Math.round(y*scale);
   ctx.fillStyle='#fff';
   ctx.fillRect(ox, oy, Math.round(dm.cols*mod), Math.round(dm.rows*mod));
@@ -1323,7 +1322,8 @@ function drawGW(ctx,cmd,scale){
   const {x,y,bpr,h}=cmd;
   const data=cmd.data;  // already decoded binary by parser
   if(!data) return;
-  const ds=Math.max(1,Math.round(scale));
+  // Each GW source dot maps to scale canvas pixels
+  const ox=x*scale, oy=y*scale;
   for(let row=0;row<h;row++){
     for(let bi=0;bi<bpr;bi++){
       const byte=data.charCodeAt(row*bpr+bi)||0;
@@ -1331,7 +1331,11 @@ function drawGW(ctx,cmd,scale){
         if(byte&(1<<bit)){
           const col=bi*8+(7-bit);
           ctx.fillStyle='#000';
-          ctx.fillRect(Math.round(x*scale)+col*ds,Math.round(y*scale)+row*ds,ds,ds);
+          const rx=Math.round(ox+col*scale);
+          const ry=Math.round(oy+row*scale);
+          const rw=Math.max(1,Math.round(ox+(col+1)*scale)-rx);
+          const rh=Math.max(1,Math.round(oy+(row+1)*scale)-ry);
+          ctx.fillRect(rx,ry,rw,rh);
         }
       }
     }
@@ -1382,7 +1386,7 @@ function getBB(cmd,scale){
     case 'BARCODE':{
       const {bars,isC39}=getBarBits(cmd);
       const bwDots=bars ? barWidthDots(bars,isC39,cmd.narrow,cmd.wide)*BAR_WIDTH_FACTOR : (cmd.data.length||1)*cmd.narrow*11*BAR_WIDTH_FACTOR;
-      const hriH=cmd.hri ? Math.max(10, Math.round(10*scale)) : 0;
+      const hriH=cmd.hri ? Math.round((EPL_FONTS[4].h+2)*scale) : 0; // Font4=24dots + 2dot gap
       const bw=Math.max(4,p(bwDots));
       const bh=p(cmd.h)+hriH;
       const rot=cmd.rot||0;
