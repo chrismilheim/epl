@@ -9,7 +9,6 @@
 body { font-family: 'Segoe UI', system-ui, sans-serif; background: #111520; color: #dde; height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
 
 /* ── TOOLBAR ── */
-  
 #toolbar {
   display: flex; align-items: center; gap: 0; padding: 0;
   background: #16213e; border-bottom: 1px solid #1e3a5f; flex-shrink: 0; height: 44px;
@@ -306,6 +305,7 @@ input[type=checkbox] { accent-color: #e94560; cursor: pointer; }
   <button class="tool-btn" data-tool="barcode" id="tool-barcode"><span class="tool-icon">⌥</span> Barcode</button>
   <button class="tool-btn" data-tool="datamatrix" id="tool-datamatrix"><span class="tool-icon">▦</span> Data Matrix</button>
   <button class="tool-btn" data-tool="slant" id="tool-slant"><span class="tool-icon">╱</span> Diagonal</button>
+  <button class="tool-btn" data-tool="boxx" id="tool-boxx"><span class="tool-icon">▢</span> Box (X)</button>
   <button class="tool-btn" data-tool="image" id="tool-image"><span class="tool-icon">🖼</span> Image</button>
 
   <div id="snap-controls">
@@ -421,6 +421,7 @@ P1</textarea>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">B / O</td><td style="padding:2px 0;">Filled box / Outline box</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">C / M</td><td style="padding:2px 0;">Barcode / Data matrix</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">D</td><td style="padding:2px 0;">Diagonal line (LS)</td></tr>
+        <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">X</td><td style="padding:2px 0;">Box draw (X cmd)</td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">F</td><td style="padding:2px 0;">Zoom to fit</td></tr>
         <tr><td colspan="2" style="padding:4px 0 2px;color:#2a4a5a;border-top:1px solid #1a2a3a;"></td></tr>
         <tr><td style="color:#8ab;padding:2px 4px 2px 0;white-space:nowrap;">Click</td><td style="padding:2px 0;">Select element</td></tr>
@@ -936,6 +937,7 @@ function parseEPL2(src, dpi, wIn, hIn){
     }
 
     // q (lowercase) = label width — must check before toUpperCase switch
+    if(one==='X'){const p=extractParams(raw.slice(1).trim());if(p.length>=5){const x1=+p[0]||0,y1=+p[1]||0,t=Math.max(1,+p[2]||3),x2=+p[3]||0,y2=+p[4]||0;cmds.push({type:'BOX_X',x:x1,y:y1,t:t,x2:x2,y2:y2,w:x2-x1,h:y2-y1,lineIdx:li});}continue;}
     if(raw[0]==='q'){const qw=+raw.slice(1).trim();cmds.push({type:'LABEL_WIDTH',w:qw||cfg.width});continue;}
 
     switch(one){
@@ -983,6 +985,18 @@ function renderEPL2(cmds,cfg,canvas,zoom,dpi){
         ctx.fillRect(px(cmd.x),px(cmd.y+cmd.h-cmd.t),Math.max(1,px(cmd.w)),t);   // bottom
         ctx.fillRect(px(cmd.x),px(cmd.y),t,Math.max(1,px(cmd.h)));               // left
         ctx.fillRect(px(cmd.x+cmd.w-cmd.t),px(cmd.y),t,Math.max(1,px(cmd.h)));   // right
+        break;
+      }
+      case 'BOX_X': {
+        // X command: x1,y1,thickness,x2,y2 — draws box border using absolute endpoints
+        const t=Math.max(1,px(cmd.t||3));
+        const bx=px(cmd.x),by=px(cmd.y),bx2=px(cmd.x2),by2=px(cmd.y2);
+        const bw=bx2-bx, bh=by2-by;
+        ctx.fillStyle='#000';
+        ctx.fillRect(bx, by,  bw, t);        // top
+        ctx.fillRect(bx, by2-t, bw, t);      // bottom
+        ctx.fillRect(bx, by,  t,  bh);       // left
+        ctx.fillRect(bx2-t, by, t, bh);      // right
         break;
       }
       case 'LINE_OPAQUE': ctx.fillStyle='#000'; ctx.fillRect(px(cmd.x),px(cmd.y),Math.max(1,px(cmd.w)),Math.max(1,px(cmd.h))); break;
@@ -1408,6 +1422,8 @@ function getBB(cmd,scale,fontScale){
       const moduleDots=cmd.module||15;
       return {x:p(cmd.x),y:p(cmd.y),w:Math.round(p(cols*moduleDots)),h:Math.round(p(rows*moduleDots)),rw:false,rh:false};
     }
+    case 'BOX_X':
+      return {x:p(cmd.x),y:p(cmd.y),w:Math.max(4,p(cmd.x2)-p(cmd.x)),h:Math.max(4,p(cmd.y2)-p(cmd.y)),rw:true,rh:true};
     case 'BOX_OUTLINE':
     case 'LINE_OPAQUE':
     case 'LINE_ERASE':
@@ -1444,6 +1460,8 @@ function cmdToEPLLine(cmd){
       // LO draws the filled box, LE erases the inside — pure valid EPL2
       return `LO${x},${y},${w},${h}\nLE${x+t},${y+t},${w-t*2},${h-t*2}`;
     }
+    case 'BOX_X':
+      return `X${cmd.x},${cmd.y},${cmd.t||3},${cmd.x2},${cmd.y2}`;
     case 'LINE_OPAQUE':
       return `LO${cmd.x},${cmd.y},${cmd.w},${cmd.h}`;
     case 'LINE_ERASE':
@@ -1590,7 +1608,7 @@ function buildPropsPanel(cmd,onUpdate,onDelete,onLayer){
   if(!cmd){label.textContent='';content.style.display='none';noSel.style.display='block';return;}
   content.style.display='block';noSel.style.display='none';
 
-  const typeNames={BOX_OUTLINE:'Outline Box',TEXT:'Text',BARCODE:'Barcode',DATAMATRIX:'Data Matrix',GRAPHIC_WRITE:'Image (GW)',LINE_OPAQUE:'Filled Box',LINE_ERASE:'Erase Box',LINE_HORIZ:'H-Line',LINE_VERT:'V-Line',LINE_SLANT:'Diagonal Line'};
+  const typeNames={BOX_OUTLINE:'Outline Box',BOX_X:'Box (X)',TEXT:'Text',BARCODE:'Barcode',DATAMATRIX:'Data Matrix',GRAPHIC_WRITE:'Image (GW)',LINE_OPAQUE:'Filled Box',LINE_ERASE:'Erase Box',LINE_HORIZ:'H-Line',LINE_VERT:'V-Line',LINE_SLANT:'Diagonal Line'};
   label.textContent=typeNames[cmd.type]||cmd.type;
 
   function row(label,input){
@@ -1714,6 +1732,11 @@ function buildPropsPanel(cmd,onUpdate,onDelete,onLayer){
     content.appendChild(sec);
   }
 
+  if(cmd.type==='BOX_X'){
+    // keep x2/y2 in sync with drag (x,y move; x2=x+w, y2=y+h)
+    // when props edited directly, sync w/h
+    cmd.w=cmd.x2-cmd.x; cmd.h=cmd.y2-cmd.y;
+  }
   if(cmd.type==='BOX_OUTLINE'){
     const sec=document.createElement('div');sec.className='prop-section';
     const t2=document.createElement('div');t2.className='prop-section-title';t2.textContent='Outline Box';sec.appendChild(t2);
@@ -1959,7 +1982,7 @@ function buildOverlay(){
   const scale=state.zoom*(203/(state.dpi||203));
   const fontScale=state.zoom;  // fonts normalize to 203 DPI physical size
   const px=d=>Math.round(d*scale);
-  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT','LINE_SLANT'];
+  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','BOX_X','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT','LINE_SLANT'];
 
   state.parsed.cmds.forEach((cmd,idx)=>{
     if(!draggable.includes(cmd.type)) return;
@@ -2058,11 +2081,11 @@ function startDrag(e, primaryIdx){
     dragTargets.forEach(({cmd:c,ox,oy,ox2,oy2})=>{
       c.x=Math.max(0,snap(ox+dx,grid));
       c.y=Math.max(0,snap(oy+dy,grid));
-      // For diagonal lines, also translate the second endpoint
-      if(c.type==='LINE_SLANT'&&ox2!==undefined){
+      // For elements with absolute endpoints, translate x2/y2 together with x/y
+      if((c.type==='LINE_SLANT'||c.type==='BOX_X')&&ox2!==undefined&&oy2!==undefined){
         c.x2=Math.max(0,snap(ox2+dx,grid));
         c.y2=Math.max(0,snap(oy2+dy,grid));
-
+        if(c.type==='BOX_X'){c.w=c.x2-c.x;c.h=c.y2-c.y;}
       }
     });
     let pageSrc=getPageSrc(eplInput.value,state.currentPage);
@@ -2152,16 +2175,22 @@ function onResizeStart(e,idx,dir){
   if(!cmd) return;
   const scale=state.zoom*(203/(state.dpi||203));
   const sx=e.clientX,sy=e.clientY;
-  const ow=cmd.w||cmd.h||50, oh=cmd.h||50;
+  const ow=(cmd.type==='BOX_X'?cmd.x2-cmd.x:cmd.w)||50, oh=(cmd.type==='BOX_X'?cmd.y2-cmd.y:cmd.h)||50;
   const grid=state.snapEnabled?state.snapSize:0;
 
   function move(ev){
     const dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
-    if(dir==='br'||dir==='r'){cmd.w=Math.max(1,snap(ow+dx,grid));}
-    if(dir==='br'||dir==='b'){cmd.h=Math.max(1,snap(oh+dy,grid));}
-    // For LINE_HORIZ resize width in 'w', thickness in h via t
-    if(cmd.type==='LINE_HORIZ'&&dir==='r') cmd.w=Math.max(1,snap(ow+dx,grid));
-    if(cmd.type==='LINE_VERT'&&dir==='b') cmd.h=Math.max(1,snap(oh+dy,grid));
+    if(cmd.type==='BOX_X'){
+      // BOX_X uses absolute x2/y2 — resize by moving the end point
+      if(dir==='br'||dir==='r'){cmd.x2=Math.max(cmd.x+1,snap(cmd.x+ow+dx,grid));cmd.w=cmd.x2-cmd.x;}
+      if(dir==='br'||dir==='b'){cmd.y2=Math.max(cmd.y+1,snap(cmd.y+oh+dy,grid));cmd.h=cmd.y2-cmd.y;}
+    } else {
+      if(dir==='br'||dir==='r'){cmd.w=Math.max(1,snap(ow+dx,grid));}
+      if(dir==='br'||dir==='b'){cmd.h=Math.max(1,snap(oh+dy,grid));}
+      // For LINE_HORIZ resize width in 'w', thickness in h via t
+      if(cmd.type==='LINE_HORIZ'&&dir==='r') cmd.w=Math.max(1,snap(ow+dx,grid));
+      if(cmd.type==='LINE_VERT'&&dir==='b') cmd.h=Math.max(1,snap(oh+dy,grid));
+    }
     historySave();
     eplInput.value=setPageSrc(eplInput.value,state.currentPage,updateLine(getPageSrc(eplInput.value,state.currentPage),cmd.lineIdx,cmdToEPLLine(cmd)));
     render();
@@ -2237,6 +2266,8 @@ overlay.addEventListener('mousedown',e=>{
     newCmd={type:'DATAMATRIX',x:dotX,y:dotY,dmtype:'D',module:15,data:'12345'};
   } else if(state.activeTool==='slant'){
     newCmd={type:'LINE_SLANT',x:dotX,y:dotY,t:3,x2:dotX+100,y2:dotY+100};
+  } else if(state.activeTool==='boxx'){
+    newCmd={type:'BOX_X',x:dotX,y:dotY,t:3,x2:dotX+150,y2:dotY+100,w:150,h:100};
   } else if(state.activeTool==='image'){
     window.openImageModal(dotX,dotY);
     setTool('select');
@@ -2328,7 +2359,7 @@ overlay.addEventListener('mousedown',e=>{
   if(!rb) return;
   rb.style.cssText=`display:block;left:${startX}px;top:${startY}px;width:0;height:0;`;
 
-  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT','LINE_SLANT'];
+  const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','BOX_X','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT','LINE_SLANT'];
 
   function rbMove(ev){
     const cx=ev.clientX-rect.left, cy=ev.clientY-rect.top;
@@ -2633,7 +2664,16 @@ function lintEPL2(src, dpi){
 
     // ── X command (box with rounded corners) ─────────────────────
     if(one==='X'){
-      add('warn',li,`<b>X (rounded box)</b> — unreliable on many Zebra printers. Results vary significantly by printer model and firmware. Consider using <b>LO</b> (filled box) or <b>LO+LE</b> (outline box) instead for consistent output.`);
+      const p=extractParams(raw.slice(1).trim());
+      if(p.length<5){add('err',li,`<b>X</b> needs 5 params (x1,y1,thickness,x2,y2), got ${p.length}`);}
+      else{
+        const x1=+p[0],y1=+p[1],t=+p[2],x2=+p[3],y2=+p[4];
+        if(x1<0||y1<0||x2<0||y2<0) add('err',li,`<b>X</b> coordinates must be ≥0`);
+        if(x2<=x1) add('err',li,`<b>X</b> end X (${x2}) must be greater than start X (${x1})`);
+        if(y2<=y1) add('err',li,`<b>X</b> end Y (${y2}) must be greater than start Y (${y1})`);
+        if(t<1) add('warn',li,`<b>X</b> thickness ${t} is less than 1 dot`);
+        if(t>(x2-x1)/2||t>(y2-y1)/2) add('warn',li,`<b>X</b> thickness ${t} is more than half the box dimension — box will be solid`);
+      }
     }
 
     // ── Unknown commands ──────────────────────────────────────────
