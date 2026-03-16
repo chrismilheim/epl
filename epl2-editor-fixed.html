@@ -1055,6 +1055,8 @@ function drawText(ctx,cmd,scale,fontScale){
   // fontScale=zoom for DPI-normalized font size (fonts are same physical size at any DPI)
   // scale=zoom*(203/dpi) for coordinate positioning
   if(fontScale===undefined) fontScale=scale;
+  // Font 2 (10x16) calibration correction for 300 DPI accuracy
+  const fontScaleAdj = (cmd.fontNum===2) ? fontScale*0.9 : fontScale;
   const {x,y,font,hMult,vMult,rev,data,rot}=cmd;
   const fh=font.h*vMult;
   const charAdv = getCharAdv(cmd);
@@ -1062,18 +1064,18 @@ function drawText(ctx,cmd,scale,fontScale){
   const rotMap=[0,Math.PI/2,Math.PI,-Math.PI/2];
   ctx.translate(Math.round(x*scale),Math.round(y*scale));
   ctx.rotate(rotMap[rot]||0);
-  if(rev){ctx.fillStyle='#000';ctx.fillRect(0,0,Math.round(charAdv*data.length*fontScale),Math.round(fh*fontScale));ctx.fillStyle='#fff';}
+  if(rev){ctx.fillStyle='#000';ctx.fillRect(0,0,Math.round(charAdv*data.length*fontScaleAdj),Math.round(fh*fontScaleAdj));ctx.fillStyle='#fff';}
   else ctx.fillStyle='#000';
   for(let ci=0;ci<data.length;ci++){
     const code=data.charCodeAt(ci);
     const glyphRows=font.chars[code];
-    if(!glyphRows){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1;ctx.strokeRect(Math.round(ci*charAdv*fontScale),0,Math.round(charAdv*fontScale)-1,Math.round(fh*fontScale)-1);continue;}
-    const cx=Math.round(ci*charAdv*fontScale);
+    if(!glyphRows){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1;ctx.strokeRect(Math.round(ci*charAdv*fontScaleAdj),0,Math.round(charAdv*fontScaleAdj)-1,Math.round(fh*fontScaleAdj)-1);continue;}
+    const cx=Math.round(ci*charAdv*fontScaleAdj);
     for(let row=0;row<font.h;row++){
       const rb=glyphRows[row];
       for(let col=0;col<font.w;col++){
         if(rb&(1<<(font.w-1-col))){
-          ctx.fillRect(cx+Math.round(col*hMult*fontScale),Math.round(row*vMult*fontScale),Math.max(1,Math.round(hMult*fontScale)),Math.max(1,Math.round(vMult*fontScale)));
+          ctx.fillRect(cx+Math.round(col*hMult*fontScaleAdj),Math.round(row*vMult*fontScaleAdj),Math.max(1,Math.round(hMult*fontScaleAdj)),Math.max(1,Math.round(vMult*fontScaleAdj)));
         }
       }
     }
@@ -1386,18 +1388,20 @@ function getBB(cmd,scale,fontScale){
   if(fontScale===undefined) fontScale=scale;
   const p=d=>Math.round(d*scale);
   const fp=d=>Math.round(d*fontScale);  // font-scaled pixel
+  const fontScaleAdj2 = (cmd.fontNum===2) ? fontScale*0.9 : fontScale;
+  const fp2=d=>Math.round(d*fontScaleAdj2);  // font-2-adjusted pixel
   switch(cmd.type){
     case 'TEXT':{
       const fh=cmd.font.h*cmd.vMult;
       const charAdv = getCharAdv(cmd);
-      const textW = Math.max(20, fp(charAdv*(cmd.data.length||1)));
-      const fontH = Math.max(8, fp(fh));
+      const textW = Math.max(20, fp2(charAdv*(cmd.data.length||1)));
+      const fontH = Math.max(8, fp2(fh));
       const rot = cmd.rot||0;
       switch(rot){
         case 1: return {x:p(cmd.x)-fontH, y:p(cmd.y),       w:fontH, h:textW, rw:false, rh:false};
         case 2: return {x:p(cmd.x)-textW, y:p(cmd.y)-fontH, w:textW, h:fontH, rw:false, rh:false};
         case 3: return {x:p(cmd.x),       y:p(cmd.y)-textW, w:fontH, h:textW, rw:false, rh:false};
-        default: return {x:p(cmd.x), y:p(cmd.y), w:textW, h:fontH, rw:false, rh:false};
+        default: return {x:p(cmd.x), y:p(cmd.y), w:textW, h:fontH, rw:false, rh:false};  // textW/fontH already use fp2
       }
     }
     case 'BARCODE':{
