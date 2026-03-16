@@ -969,7 +969,7 @@ function parseEPL2(src, dpi, wIn, hIn){
 // ═══════════════════════════════════════════════════════════════════
 function renderEPL2(cmds,cfg,canvas,zoom,dpi){
   const scale=zoom*(203/dpi);
-  const fontScale=scale;  // fonts scale with DPI — higher DPI = smaller physical text
+  const fontScale=zoom*Math.sqrt(203/(dpi||203));  // partial DPI correction — geometric mean
   const W=Math.round(cfg.width*scale), H=Math.round(cfg.height*scale);
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
@@ -1980,7 +1980,7 @@ function buildOverlay(){
 
   if(!state.parsed) return;
   const scale=state.zoom*(203/(state.dpi||203));
-  const fontScale=state.zoom*(203/(state.dpi||203));  // fonts scale with DPI
+  const fontScale=state.zoom*Math.sqrt(203/(state.dpi||203));  // partial DPI correction
   const px=d=>Math.round(d*scale);
   const draggable=['TEXT','BARCODE','DATAMATRIX','GRAPHIC_WRITE','BOX_OUTLINE','BOX_X','LINE_OPAQUE','LINE_ERASE','LINE_HORIZ','LINE_VERT','LINE_SLANT'];
 
